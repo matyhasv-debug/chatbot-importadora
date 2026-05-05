@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotPanel</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F8FA;
+  --surf:#FFFFFF;
+  --surf2:#F0F2F5;
+  --border:#E4E7EC;
+  --border2:#CBD2DA;
+  --text:#111827;
+  --text2:#4B5563;
+  --muted:#9CA3AF;
+  --accent:#1D4ED8;
+  --accent-light:#EFF6FF;
+  --green:#059669;
+  --green-light:#ECFDF5;
+  --amber:#D97706;
+  --amber-light:#FFFBEB;
+  --purple:#7C3AED;
+  --purple-light:#F5F3FF;
+  --red:#DC2626;
+  --red-light:#FEF2F2;
+  --slate:#64748B;
+}
+html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text)}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.topbar{
+  background:var(--surf);border-bottom:1px solid var(--border);
+  padding:0 24px;height:60px;
+  display:flex;align-items:center;gap:16px;flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  width:34px;height:34px;border-radius:10px;
+  background:var(--accent);display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:16px;font-weight:800;letter-spacing:-1px;
+}
+.logo-name{font-size:15px;font-weight:700;color:var(--text)}
+.logo-name span{color:var(--accent)}
+.empresa-badge{
+  background:var(--accent-light);color:var(--accent);
+  font-size:11px;font-weight:600;padding:3px 10px;
+  border-radius:20px;border:1px solid #BFDBFE;
+}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.live-pill{
+  display:flex;align-items:center;gap:6px;
+  background:var(--green-light);color:var(--green);
+  font-size:11px;font-weight:600;padding:4px 10px;
+  border-radius:20px;border:1px solid #A7F3D0;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.top-stat{border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--text2);background:var(--surf2)}
+.top-stat.pend{background:var(--amber-light);border-color:#FDE68A;color:var(--amber)}
+.top-stat.pag{background:var(--green-light);border-color:#A7F3D0;color:var(--green)}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:pointer}
+
+.nav{background:var(--surf);border-bottom:1px solid var(--border);display:flex;padding:0 24px;flex-shrink:0}
+.nav-item{font-size:13px;font-weight:600;color:var(--muted);padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.nav-item:hover{color:var(--text2)}
+.nav-item.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.body{display:flex;flex:1;overflow:hidden}
+.view{display:none;flex:1;overflow:hidden;flex-direction:column}
+.view.active{display:flex}
+
+.sidebar{width:280px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sb-head{padding:14px 16px;border-bottom:1px solid var(--border)}
+.sb-search{width:100%;padding:8px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .15s}
+.sb-search:focus{border-color:var(--accent)}
+.sb-filters{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;transition:all .15s;letter-spacing:.02em}
+.chip:hover{border-color:var(--border2);color:var(--text2)}
+.chip.on{background:var(--accent-light);color:var(--accent);border-color:#BFDBFE}
+.sb-count{font-size:11px;color:var(--muted);margin-top:8px;font-weight:500}
+.contacts{flex:1;overflow-y:auto}
+.contacts::-webkit-scrollbar{width:3px}
+.contacts::-webkit-scrollbar-thumb{background:var(--border)}
+.contact{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);border-left:3px solid transparent;transition:all .12s}
+.contact:hover{background:var(--surf2)}
+.contact.sel{background:var(--accent-light);border-left-color:var(--accent)}
+.c-row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.c-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.c-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+.c-phone{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:5px}
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px}
+.b-conv{background:var(--accent-light);color:var(--accent)}
+.b-pend{background:var(--amber-light);color:var(--amber)}
+.b-pag{background:var(--green-light);color:var(--green)}
+.b-desp{background:var(--purple-light);color:var(--purple)}
+.b-cons{background:#F0F9FF;color:#0369A1}
+.b-cot{background:#FFF7ED;color:#C2410C}
+.b-sin{background:var(--surf2);color:var(--muted)}
+
+.chat{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.chat-header{padding:14px 20px;background:var(--surf);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.ch-avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.ch-info{flex:1}
+.ch-name{font-size:15px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ch-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px}
+.ch-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.estado-sel{font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;background:var(--surf2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;cursor:pointer;outline:none;transition:border-color .15s}
+.estado-sel:focus{border-color:var(--accent)}
+.btn-hum{display:flex;align-items:center;gap:6px;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:var(--surf);color:var(--text2);transition:all .15s}
+.btn-hum:hover{border-color:var(--amber);color:var(--amber)}
+.btn-hum.on{background:var(--amber-light);border-color:var(--amber);color:var(--amber)}
+.btn-ver{font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:var(--surf);color:var(--text2);transition:all .15s}
+.btn-ver:hover{border-color:var(--accent);color:var(--accent)}
+
+.messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:8px}
+.messages::-webkit-scrollbar{width:4px}
+.messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.date-sep{display:flex;align-items:center;gap:10px;margin:8px 0}
+.date-sep::before,.date-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+.date-sep span{font-size:10px;font-weight:600;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.msg{display:flex;gap:10px;max-width:780px;animation:fadeUp .2s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.msg-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px;font-weight:700}
+.msg.user .msg-av{background:var(--accent-light);color:var(--accent)}
+.msg.bot .msg-av{background:var(--green-light);color:var(--green)}
+.msg.human .msg-av{background:var(--amber-light);color:var(--amber)}
+.msg-body{flex:1}
+.msg-meta{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.msg-sender{font-size:11px;font-weight:700}
+.msg.user .msg-sender{color:var(--accent)}
+.msg.bot .msg-sender{color:var(--green)}
+.msg.human .msg-sender{color:var(--amber)}
+.msg-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-left:auto}
+.msg-bubble{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.7;padding:10px 14px;border-radius:4px 12px 12px 12px;white-space:pre-wrap;word-break:break-word}
+.msg.user .msg-bubble{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
+.msg.bot .msg-bubble{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
+.msg.human .msg-bubble{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
+
+.input-area{padding:12px 16px;background:var(--surf);border-top:1px solid var(--border);flex-shrink:0}
+.input-hint{font-size:11px;font-weight:600;color:var(--muted);padding:0 4px 8px}
+.input-hint.on{color:var(--amber)}
+.input-row{display:flex;gap:8px;align-items:flex-end}
+.msg-input{flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;padding:9px 13px;resize:none;min-height:40px;max-height:110px;outline:none;transition:border-color .15s;line-height:1.5}
+.msg-input:focus{border-color:var(--accent)}
+.msg-input:disabled{opacity:.4;cursor:not-allowed}
+.send-btn{width:40px;height:40px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s;flex-shrink:0;color:#fff}
+.send-btn:hover{background:#1E40AF;transform:scale(1.05)}
+.send-btn:disabled{background:var(--muted);cursor:not-allowed;transform:none}
+
+.metrics-wrap{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.kpi-val{font-size:28px;font-weight:800;line-height:1}
+.kpi-lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.kpi-sub{font-size:11px;color:var(--text2);margin-top:6px}
+.card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:20px}
+.funnel-step{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.funnel-lbl{font-size:12px;font-weight:600;width:140px;flex-shrink:0;color:var(--text2)}
+.funnel-bg{flex:1;background:var(--surf2);border-radius:20px;height:18px;overflow:hidden}
+.funnel-fill{height:100%;border-radius:20px;transition:width .8s ease;min-width:2px}
+.funnel-n{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;width:40px;text-align:right;flex-shrink:0}
+.funnel-pct{font-size:10px;color:var(--muted);width:36px;text-align:right;flex-shrink:0}
+.estados-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}
+.estado-box{background:var(--surf2);border-radius:8px;padding:10px;text-align:center}
+.estado-emoji{font-size:18px;margin-bottom:4px}
+.estado-num{font-size:20px;font-weight:800;color:var(--text)}
+.estado-lbl{font-size:10px;color:var(--muted);font-weight:600;margin-top:2px}
+
+.fu-wrap{flex:1;overflow-y:auto;padding:24px}
+.fu-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.fu-item{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.fu-tipo{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.fu-info{flex:1}
+.fu-nombre{font-size:13px;font-weight:600;color:var(--text)}
+.fu-tiempo{font-size:11px;color:var(--muted);margin-top:2px}
+
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:8px}
+.empty-icon{font-size:36px}
+.empty p{font-size:13px}
+
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;font-size:12px;font-weight:600;padding:10px 16px;border-radius:10px;display:none;z-index:999;animation:toastIn .2s ease}
+@keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-icon">B</div>
+    <div class="logo-name">Bot<span>Panel</span></div>
+  </div>
+  <span class="empresa-badge" id="empresa-badge">Cargando...</span>
+  <div class="topbar-right">
+    <div class="live-pill" id="live-pill"><div class="live-dot"></div><span id="live-txt">Conectando</span></div>
+    <div class="top-stat" id="top-hoy">– msgs hoy</div>
+    <div class="top-stat pend" id="top-pend">– pendientes</div>
+    <div class="top-stat pag" id="top-pag">– pagados</div>
+    <div class="avatar" id="avatar-initials">–</div>
+  </div>
+</header>
+
+<nav class="nav">
+  <div class="nav-item active" onclick="switchTab('chat',this)">💬 Conversaciones</div>
+  <div class="nav-item" onclick="switchTab('metrics',this)">📊 Métricas</div>
+  <div class="nav-item" onclick="switchTab('catalogo',this)">📦 Catálogo</div>
+  <div class="nav-item" onclick="switchTab('followups',this)">⏰ Follow-ups <span id="fu-badge" style="display:none;background:var(--amber);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;margin-left:4px;font-weight:700"></span></div>
+</nav>
+
+<div class="body">
+
+  <!-- CHAT -->
+  <div class="view active" id="view-chat" style="flex-direction:row">
+    <aside class="sidebar">
+      <div class="sb-head">
+        <input class="sb-search" placeholder="Buscar por nombre o teléfono..." oninput="filtrarBusqueda(this.value)">
+        <div class="sb-filters">
+          <button class="chip on" onclick="setFiltro(null,this)">Todos</button>
+          <button class="chip" onclick="setFiltro('en_conversacion',this)">💬 Conv.</button>
+          <button class="chip" onclick="setFiltro('pago_pendiente',this)">⏳ Pendiente</button>
+          <button class="chip" onclick="setFiltro('pagado',this)">✅ Pagado</button>
+          <button class="chip" onclick="setFiltro('despachado',this)">🚚 Despachado</button>
+        </div>
+        <div class="sb-count" id="sb-count">0 contactos</div>
+      </div>
+      <div class="contacts" id="contacts">
+        <div class="empty" style="padding:40px 0"><div class="empty-icon">💬</div><p>Cargando...</p></div>
+      </div>
+    </aside>
+
+    <section class="chat">
+      <div class="chat-header">
+        <div class="ch-avatar" id="ch-av">–</div>
+        <div class="ch-info">
+          <div class="ch-name"><span id="ch-name">Selecciona un contacto</span><span id="ch-badge"></span></div>
+          <div class="ch-sub" id="ch-sub">Vista general en tiempo real</div>
+        </div>
+        <div class="ch-actions" id="ch-actions" style="display:none">
+          <select class="estado-sel" id="estado-sel" onchange="cambiarEstado(this.value)">
+            <option value="en_conversacion">💬 En conversación</option>
+            <option value="consultando">🔍 Consultando</option>
+            <option value="cotizado">📋 Cotizado</option>
+            <option value="pago_pendiente">⏳ Pago pendiente</option>
+            <option value="pagado">✅ Pagado</option>
+            <option value="despachado">🚚 Despachado</option>
+            <option value="sin_contacto">⚪ Sin contacto</option>
+            <option value="abandono">👻 Abandono</option>
+          </select>
+          <button class="btn-hum" id="btn-hum" onclick="toggleHumano()">
+            <span id="hum-icon">🤖</span><span id="hum-lbl">Bot activo</span>
+          </button>
+        </div>
+        <button class="btn-ver" id="btn-ver" onclick="verTodos()">Ver todos</button>
+      </div>
+      <div class="messages" id="messages">
+        <div class="empty"><div class="empty-icon">💬</div><p>Cargando mensajes...</p></div>
+      </div>
+      <div class="input-area">
+        <div class="input-hint" id="input-hint">Selecciona un contacto y activa modo humano para responder</div>
+        <div class="input-row">
+          <textarea class="msg-input" id="msg-input" placeholder="Escribe tu respuesta..." rows="1" disabled onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="enviarMsg()" disabled>➤</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- METRICAS -->
+  <div class="view" id="view-metrics">
+    <div class="metrics-wrap" id="metrics-content">
+      <div class="empty"><div class="empty-icon">📊</div><p>Cargando métricas...</p></div>
+    </div>
+  </div>
+
+  <!-- FOLLOWUPS -->
+  <div class="view" id="view-followups">
+    <div class="fu-wrap" id="fu-content">
+      <div class="empty"><div class="empty-icon">⏰</div><p>Cargando follow-ups...</p></div>
+    </div>
+  </div>
+ <div class="view" id="view-catalogo">
+    <div class="metrics-wrap" id="catalogo-content">
+      <div class="empty"><div class="empty-icon">📦</div><p>Cargando catálogo...</p></div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+
+<div id="toast"></div>
+
+<script>
+const _p = new URLSearchParams(location.search);
+const _key = _p.get('key') || '';
+const _path = location.pathname.split('/');
+const _slug = _path[2] && _path[2] !== '' && _path[2] !== 'panel' ? _path[2] : null;
+const API = _slug ? '/panel/' + _slug + '/api' : '/panel/api';
+const ES_CLIENTE = !!_slug;
+
+// ─── Auth JWT ─────────────────────────────────────────────────────────────────
+const _token = localStorage.getItem('bp_token') || '';
+const _useJWT = !!_token && _p.get('auth') === 'jwt';
+
+function getHeaders() {
+  if (_useJWT) return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _token };
+  return { 'Content-Type': 'application/json' };
+}
+
+function apiURL(path) {
+  if (_useJWT) return API + path + '?';
+  return API + path + (_key ? '?key=' + _key : '?');
+}
+
+// Si es cliente JWT y no tiene token → redirigir al login
+if (ES_CLIENTE && _p.get('auth') === 'jwt' && !_token) {
+  window.location.href = '/panel/' + _slug + '/login';
+}
+
+// Mostrar empresa desde localStorage si viene de JWT
+if (_useJWT) {
+  const emp = localStorage.getItem('bp_empresa');
+  if (emp) {
+    document.getElementById('empresa-badge').textContent = emp;
+    document.title = emp + ' — BotPanel';
+  }
+}
+
+const QK = _key ? '?key=' + _key : '?';
+
+if (ES_CLIENTE) {
+  document.getElementById('btn-ver').style.display = 'none';
+}
+
+let telefonoActivo = null, nombreActivo = '', estadoActivo = '';
+let humanosActivos = new Set(), filtroEstado = null, busqueda = '';
+let tabActual = 'chat', humanActivo = false, autoScroll = true;
+let todosContactos = [];
+
+const $ = id => document.getElementById(id);
+const fmt = iso => new Date(iso.replace(' ', 'T') + 'Z').toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' });
+const fmtDate = iso => new Date(iso.replace(' ', 'T') + 'Z').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Santiago' });
+const esc = t => (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function initials(n) {
+  if (!n) return '?';
+  const p = n.trim().split(' ');
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : p[0].slice(0, 2).toUpperCase();
+}
+
+function toast(msg, color = 'var(--text)') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 110) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMsg(); }
+}
+
+const ESTADOS = {
+  sin_contacto:    { label: 'Sin contacto',    cls: 'b-sin', e: '⚪' },
+  en_conversacion: { label: 'En conversación', cls: 'b-conv', e: '💬' },
+  consultando:     { label: 'Consultando',     cls: 'b-cons', e: '🔍' },
+  cotizado:        { label: 'Cotizado',        cls: 'b-cot', e: '📋' },
+  pago_pendiente:  { label: 'Pago pendiente',  cls: 'b-pend', e: '⏳' },
+  pagado:          { label: 'Pagado',          cls: 'b-pag', e: '✅' },
+  despachado:      { label: 'Despachado',      cls: 'b-desp', e: '🚚' },
+  abandono:        { label: 'Abandono',        cls: 'b-sin', e: '👻' },
+};
+
+function badgeHTML(e) {
+  const s = ESTADOS[e] || ESTADOS.en_conversacion;
+  return `<span class="badge ${s.cls}">${s.e} ${s.label}</span>`;
+}
+
+function switchTab(tab, btn) {
+  tabActual = tab;
+  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  $('view-' + tab).classList.add('active');
+  if (tab === 'metrics') cargarMetricas();
+  if (tab === 'followups') cargarFollowUps();
+  if (tab === 'catalogo') cargarCatalogo();
+}
+
+function setFiltro(estado, btn) {
+  filtroEstado = estado;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  renderContactos();
+}
+
+function filtrarBusqueda(q) {
+  busqueda = q.toLowerCase().trim();
+  renderContactos();
+}
+
+function renderContactos() {
+  let cs = todosContactos;
+  if (filtroEstado) cs = cs.filter(c => c.estado === filtroEstado);
+  if (busqueda) cs = cs.filter(c =>
+    (c.nombre || '').toLowerCase().includes(busqueda) ||
+    (c.telefono || '').includes(busqueda)
+  );
+  $('sb-count').textContent = cs.length + ' contacto' + (cs.length !== 1 ? 's' : '');
+  const list = $('contacts');
+  if (!cs.length) {
+    list.innerHTML = '<div class="empty" style="padding:40px 0"><div class="empty-icon">🔍</div><p>Sin resultados</p></div>';
+    return;
+  }
+  list.innerHTML = cs.map(c => {
+    const s = ESTADOS[c.estado] || ESTADOS.en_conversacion;
+    const sel = c.telefono === telefonoActivo ? 'sel' : '';
+    return `<div class="contact ${sel}" onclick="seleccionar('${c.telefono}','${(c.nombre || '').replace(/'/g, "\\'")}','${c.estado || 'en_conversacion'}')">
+      <div class="c-row1">
+        <span class="c-name">${esc(c.nombre || 'Sin nombre')}</span>
+        <span class="c-time">${fmt(c.ultimo_mensaje)}</span>
+      </div>
+      <div class="c-phone">${c.telefono}</div>
+      <span class="badge ${s.cls}">${s.e} ${s.label}</span>
+    </div>`;
+  }).join('');
+}
+
+async function cargarContactos() {
+  try {
+    const data = await fetch(apiURL('/contactos'), { headers: getHeaders() }).then(r => r.json());
+    todosContactos = data.contactos || [];
+    renderContactos();
+  } catch (_) {}
+}
+
+async function cargarStats() {
+  try {
+    const data = await fetch(apiURL('/stats'), { headers: getHeaders() }).then(r => r.json());
+    if (!data.ok) return;
+    const s = data.stats;
+    if (ES_CLIENTE && s.empresa) {
+      $('empresa-badge').textContent = s.empresa;
+      document.title = s.empresa + ' — BotPanel';
+      const ini = s.empresa.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      $('avatar-initials').textContent = ini;
+    }
+    $('top-hoy').textContent = (s.mensajesHoy || 0) + ' msgs hoy';
+    $('top-pend').textContent = (s.porEstado?.pago_pendiente || 0) + ' pendientes';
+    $('top-pag').textContent = (s.porEstado?.pagado || 0) + ' pagados';
+  } catch (_) {}
+}
+
+async function cargarMensajes(telefono) {
+  const url = telefono
+  ? apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200'
+  : apiURL('/mensajes') + '&limite=150';
+const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
+  try {
+    const data = await fetch(url).then(r => r.json());
+    const msgs = data.mensajes || [];
+    const c = $('messages');
+    if (!msgs.length) {
+      c.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Sin mensajes aún</p></div>';
+      return;
+    }
+    let html = '', lastDate = '';
+    for (const m of msgs) {
+      const d = fmtDate(m.creado_en);
+      if (d !== lastDate) { html += `<div class="date-sep"><span>${d}</span></div>`; lastDate = d; }
+      const txt = m.mensaje || '';
+      const isH = txt.startsWith('[HUMANO]');
+      const cls = m.rol === 'user' ? 'user' : isH ? 'human' : 'bot';
+      const av = m.rol === 'user' ? initials(m.nombre) : isH ? 'TÚ' : 'B';
+      const sender = m.rol === 'user' ? esc(m.nombre || 'Cliente') : isH ? 'Tú' : '🤖 Bot';
+      const limpio = isH ? txt.replace('[HUMANO] ', '') : txt;
+      let mediaHTML = '';
+      try {
+        const med = m.media_json ? JSON.parse(m.media_json) : null;
+        if (med) {
+          const src = '/panel/api/media/' + med.media_id;
+          if (med.tipo === 'image' || med.tipo === 'sticker') mediaHTML = `<img src="${src}" style="max-width:240px;border-radius:8px;border:1px solid var(--border);display:block;margin-top:6px;cursor:pointer" onclick="window.open('${src}','_blank')" loading="lazy">`;
+          else if (med.tipo === 'audio' || med.tipo === 'voice') mediaHTML = `<audio controls src="${src}" style="margin-top:6px;width:220px;accent-color:var(--accent)"></audio>`;
+          else if (med.tipo === 'document') mediaHTML = `<a href="${src}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:6px;text-decoration:none;color:var(--text);font-size:12px;font-weight:500">📄 ${esc(med.filename || 'Documento')}</a>`;
+        }
+      } catch (_) {}
+      html += `<div class="msg ${cls}">
+        <div class="msg-av">${av}</div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-sender">${sender}</span>
+            <span class="msg-time">${fmt(m.creado_en)}</span>
+          </div>
+          <div class="msg-bubble">${esc(limpio)}</div>
+          ${mediaHTML}
+        </div>
+      </div>`;
+    }
+    c.innerHTML = html;
+    setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
+  } catch (_) {}
+}
+
+function seleccionar(tel, nom, est) {
+  telefonoActivo = tel;
+  nombreActivo = nom || tel;
+  estadoActivo = est || 'en_conversacion';
+  $('ch-av').textContent = initials(nom);
+  $('ch-name').textContent = nombreActivo;
+  $('ch-sub').textContent = tel;
+  $('ch-badge').innerHTML = ' ' + badgeHTML(estadoActivo);
+  $('ch-actions').style.display = 'flex';
+  $('estado-sel').value = estadoActivo;
+  humanActivo = humanosActivos.has(tel);
+  actualizarModoHumano(humanActivo);
+  cargarMensajes(tel);
+  renderContactos();
+}
+
+function verTodos() {
+  if (ES_CLIENTE) return;
+  telefonoActivo = null; nombreActivo = ''; estadoActivo = '';
+  $('ch-av').textContent = '–';
+  $('ch-name').textContent = 'Todos los mensajes';
+  $('ch-sub').textContent = 'Vista general en tiempo real';
+  $('ch-badge').innerHTML = '';
+  $('ch-actions').style.display = 'none';
+  actualizarModoHumano(false);
+  cargarMensajes();
+  renderContactos();
+}
+
+async function cambiarEstado(v) {
+  if (!telefonoActivo) return;
+  try {
+    const res = await fetch(apiURL('/estado-cliente'), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ telefono: telefonoActivo, estado: v })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      estadoActivo = v;
+      $('ch-badge').innerHTML = ' ' + badgeHTML(v);
+      const s = ESTADOS[v];
+      toast(s.e + ' Estado: ' + s.label, 'var(--text)');
+      await Promise.all([cargarContactos(), cargarStats()]);
+    }
+  } catch (_) {}
+}
+
+async function toggleHumano() {
+  if (!telefonoActivo) return;
+  humanActivo = !humanActivo;
+  try {
+    await fetch(apiURL('/modo-humano'), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ telefono: telefonoActivo, activo: humanActivo })
+    });
+  } catch (_) {}
+  if (humanActivo) humanosActivos.add(telefonoActivo);
+  else humanosActivos.delete(telefonoActivo);
+  actualizarModoHumano(humanActivo);
+  toast(humanActivo ? '🧑 Bot pausado — respondiendo tú' : '🤖 Bot reactivado');
+}
+
+function actualizarModoHumano(h) {
+  const btn = $('btn-hum');
+  if (h && telefonoActivo) {
+    btn.className = 'btn-hum on';
+    $('hum-icon').textContent = '🧑'; $('hum-lbl').textContent = 'Bot pausado';
+    $('input-hint').textContent = '🧑 Respondiendo como humano — bot pausado';
+    $('input-hint').className = 'input-hint on';
+    $('msg-input').disabled = false; $('send-btn').disabled = false;
+  } else {
+    btn.className = 'btn-hum';
+    $('hum-icon').textContent = '🤖'; $('hum-lbl').textContent = 'Bot activo';
+    $('input-hint').textContent = telefonoActivo
+      ? '🤖 Bot activo — activa modo humano para responder'
+      : 'Selecciona un contacto y activa modo humano para responder';
+    $('input-hint').className = 'input-hint';
+    $('msg-input').disabled = true; $('send-btn').disabled = true;
+  }
+}
+
+async function enviarMsg() {
+  const input = $('msg-input'), msg = input.value.trim();
+  if (!msg || !telefonoActivo) return;
+  $('send-btn').disabled = true;
+  try {
+    const res = await fetch(apiURL('/responder'), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ telefono: telefonoActivo, mensaje: msg })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      input.value = ''; input.style.height = 'auto';
+      toast('✅ Mensaje enviado', 'var(--green)');
+      await cargarMensajes(telefonoActivo);
+    } else { toast('❌ Error al enviar', 'var(--red)'); }
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+  finally { $('send-btn').disabled = false; input.focus(); }
+}
+async function cargarMetricas() {
+  try {
+   const [sr, cr] = await Promise.all([
+  fetch(apiURL('/stats'), { headers: getHeaders() }).then(r => r.json()),
+  fetch(apiURL('/contactos'), { headers: getHeaders() }).then(r => r.json()),
+]);
+    const s = sr.stats || {}, cs = cr.contactos || [];
+    const total = cs.length;
+    const pag = s.porEstado?.pagado || 0;
+    const pend = s.porEstado?.pago_pendiente || 0;
+    const conv = pag + pend > 0 ? Math.round(pag / (pag + pend) * 100) : 0;
+
+    $('metrics-content').innerHTML = `
+      <div>
+        <div class="section-title">Resumen general</div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-val" style="color:var(--accent)">${s.mensajesHoy || 0}</div><div class="kpi-lbl">Mensajes hoy</div></div>
+          <div class="kpi"><div class="kpi-val" style="color:var(--green)">${s.contactosHoy || 0}</div><div class="kpi-lbl">Clientes hoy</div></div>
+          <div class="kpi"><div class="kpi-val" style="color:var(--amber)">${pend}</div><div class="kpi-lbl">Pagos pendientes</div><div class="kpi-sub">Requieren seguimiento</div></div>
+          <div class="kpi"><div class="kpi-val" style="color:var(--green)">${pag}</div><div class="kpi-lbl">Ventas cerradas</div></div>
+          <div class="kpi"><div class="kpi-val" style="color:var(--purple)">${s.porEstado?.despachado || 0}</div><div class="kpi-lbl">Despachados</div></div>
+          <div class="kpi"><div class="kpi-val" style="color:var(--accent)">${conv}%</div><div class="kpi-lbl">Conversión</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Embudo de ventas</div>
+        ${[
+          { l: '👤 Contactos totales', v: total, c: 'var(--accent)' },
+          { l: '💬 Mostraron interés', v: pend + pag, c: 'var(--amber)' },
+          { l: '✅ Pagaron', v: pag, c: 'var(--green)' },
+          { l: '🚚 Despachados', v: s.porEstado?.despachado || 0, c: 'var(--purple)' },
+        ].map(x => {
+          const pct = total > 0 ? Math.round(x.v / total * 100) : 0;
+          return `<div class="funnel-step">
+            <div class="funnel-lbl">${x.l}</div>
+            <div class="funnel-bg"><div class="funnel-fill" style="width:${pct}%;background:${x.c}"></div></div>
+            <div class="funnel-n" style="color:${x.c}">${x.v}</div>
+            <div class="funnel-pct">${pct}%</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="card">
+        <div class="section-title">Estados de clientes</div>
+        <div class="estados-grid">
+          ${Object.entries(ESTADOS).map(([k, v]) => `
+            <div class="estado-box">
+              <div class="estado-emoji">${v.e}</div>
+              <div class="estado-num">${s.porEstado?.[k] || 0}</div>
+              <div class="estado-lbl">${v.label}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    `;
+  } catch (_) {
+    $('metrics-content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Error cargando métricas</p></div>';
+  }
+}
+
+async function cargarFollowUps() {
+  try {
+    const data = await fetch(apiURL('/followups'), { headers: getHeaders() }).then(r => r.json());
+    const fus = data.followups || [];
+    const badge = $('fu-badge');
+    if (fus.length) { badge.textContent = fus.length; badge.style.display = 'inline'; }
+    else badge.style.display = 'none';
+
+    const tipos = {
+      follow_up_precio:   { l: 'Follow-up precio',  bg: 'var(--accent-light)', c: 'var(--accent)' },
+      pago_recordatorio:  { l: 'Recordatorio pago',  bg: 'var(--amber-light)', c: 'var(--amber)' },
+      post_venta:         { l: 'Post-venta',          bg: 'var(--green-light)', c: 'var(--green)' },
+      carrito_abandonado: { l: 'Carrito abandonado',  bg: 'var(--purple-light)', c: 'var(--purple)' },
+    };
+
+    if (!fus.length) {
+      $('fu-content').innerHTML = '<div class="empty" style="padding:60px 0"><div class="empty-icon">⏰</div><p>No hay follow-ups pendientes</p></div>';
+      return;
+    }
+    $('fu-content').innerHTML = `
+      <div class="section-title">Follow-ups programados (${fus.length})</div>
+      <div class="fu-list">
+        ${fus.map(f => {
+          const t = tipos[f.tipo] || { l: f.tipo, bg: 'var(--surf2)', c: 'var(--muted)' };
+          const diff = new Date(f.enviar_en) - new Date();
+          const min = Math.round(diff / 60000);
+          const ts = diff < 0 ? '<span style="color:var(--amber);font-weight:700">Enviando ahora</span>'
+            : min < 60 ? `En ${min} min` : `En ${Math.round(min / 60)} hrs`;
+          return `<div class="fu-item">
+            <span class="fu-tipo" style="background:${t.bg};color:${t.c};border:1px solid ${t.c}">${t.l}</span>
+            <div class="fu-info">
+              <div class="fu-nombre">${esc(f.nombre || f.telefono)}</div>
+              <div class="fu-tiempo">${ts} · ${f.telefono}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch (_) {}
+}
+
+function conectarSSE() {
+  if (ES_CLIENTE) {
+    $('live-txt').textContent = 'En vivo';
+    return;
+  }
+  const es = new EventSource('/panel/eventos');
+  es.onopen = () => { $('live-txt').textContent = 'En vivo'; };
+  es.onerror = () => { $('live-txt').textContent = 'Reconectando...'; };
+  es.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.tipo === 'init') humanosActivos = new Set(data.humanosActivos || []);
+    if (data.tipo === 'mensaje') {
+      const m = data.mensaje;
+      if (!telefonoActivo || m.telefono === telefonoActivo) cargarMensajes(telefonoActivo);
+      if (m.rol === 'user') { cargarStats(); cargarContactos(); }
+    }
+    if (data.tipo === 'estado_cliente') {
+      if (data.telefono === telefonoActivo) {
+        estadoActivo = data.estado;
+        $('ch-badge').innerHTML = ' ' + badgeHTML(data.estado);
+        $('estado-sel').value = data.estado;
+      }
+      cargarContactos(); cargarStats();
+    }
+    if (data.tipo === 'modo_humano') {
+      if (data.activo) humanosActivos.add(data.telefono);
+      else humanosActivos.delete(data.telefono);
+      if (data.telefono === telefonoActivo) { humanActivo = data.activo; actualizarModoHumano(data.activo); }
+      cargarContactos();
+    }
+  };
+}
+
+(async () => {
+  await Promise.all([cargarStats(), cargarContactos(), cargarMensajes(null)]);
+  conectarSSE();
+  setInterval(cargarStats, 30000);
+  setInterval(cargarContactos, 15000);
+  if (ES_CLIENTE) setInterval(() => { if (telefonoActivo) cargarMensajes(telefonoActivo); }, 10000);
+  setInterval(() => { if (tabActual === 'followups') cargarFollowUps(); }, 60000);
+  setInterval(() => { if (tabActual === 'catalogo') cargarCatalogo(); }, 60000);
+  })();
+  async function cargarCatalogo() {
+  const [embRes, prodRes] = await Promise.all([
+    fetch(apiURL('/embalajes'), { headers: getHeaders() }).then(r => r.json()).catch(() => ({ embalajes: [] })),
+    fetch(apiURL('/productos'), { headers: getHeaders() }).then(r => r.json()).catch(() => ({ productos: [] })),
+  ]);
+
+  const embalajes = embRes.embalajes || [];
+  const productos = prodRes.productos || [];
+
+  $('catalogo-content').innerHTML = `
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="section-title">📦 Embalajes mayoristas</div>
+        <button class="btn btn-primary" onclick="abrirFormEmbalaje()">+ Agregar</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        ${embalajes.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Producto</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Unidades</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Precio c/u</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Total caja</th>
+            <th style="padding:10px 16px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Acciones</th>
+          </tr></thead>
+          <tbody>${embalajes.map(e => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:12px 16px;font-weight:600">${esc(e.nombre)}</td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace">${e.unidades}</td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace">$${(e.precio_unitario||0).toLocaleString('es-CL')}</td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--green)">$${(e.total_caja||0).toLocaleString('es-CL')}</td>
+              <td style="padding:12px 16px;text-align:center;display:flex;gap:6px;justify-content:center">
+                <button onclick="editarEmbalaje(${e.id},'${esc(e.nombre)}',${e.unidades},${e.precio_unitario},${e.total_caja})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surf);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600">Editar</button>
+                <button onclick="eliminarEmbalaje(${e.id})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #FECACA;background:var(--red-light);color:var(--red);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600">Eliminar</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>` : '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No hay embalajes. Agrega el primero.</div>'}
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="section-title">🛍️ Catálogo manual</div>
+        <button class="btn btn-primary" onclick="abrirFormProducto()">+ Agregar</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        ${productos.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Producto</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Precio unit.</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Precio mayor.</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Stock</th>
+            <th style="padding:10px 16px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Estado</th>
+            <th style="padding:10px 16px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Acciones</th>
+          </tr></thead>
+          <tbody>${productos.map(p => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:12px 16px">
+                <div style="font-weight:600">${esc(p.nombre)}</div>
+                ${p.descripcion ? `<div style="font-size:11px;color:var(--muted)">${esc(p.descripcion)}</div>` : ''}
+              </td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace">$${(p.precio_unitario||0).toLocaleString('es-CL')}</td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace">$${(p.precio_mayorista||0).toLocaleString('es-CL')}</td>
+              <td style="padding:12px 16px;text-align:right;font-family:'JetBrains Mono',monospace">${p.stock}</td>
+              <td style="padding:12px 16px;text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;${p.activo ? 'background:var(--green-light);color:var(--green)' : 'background:var(--red-light);color:var(--red)'}">${p.activo ? '✅ Activo' : '❌ Inactivo'}</span></td>
+              <td style="padding:12px 16px;text-align:center;display:flex;gap:6px;justify-content:center">
+                <button onclick="editarProducto(${p.id},'${esc(p.nombre)}','${esc(p.descripcion||'')}',${p.precio_unitario},${p.precio_mayorista},${p.stock},${p.activo})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surf);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600">Editar</button>
+                <button onclick="eliminarProducto(${p.id})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #FECACA;background:var(--red-light);color:var(--red);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600">Eliminar</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>` : '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No hay productos. Agrega el primero.</div>'}
+      </div>
+    </div>
+
+    <div id="modal-embalaje" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center">
+      <div style="background:var(--surf);border-radius:14px;padding:28px;width:100%;max-width:440px;border:1px solid var(--border)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:20px" id="modal-emb-title">Agregar embalaje</div>
+        <input type="hidden" id="emb-id">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="field"><label>Nombre</label><input id="emb-nombre" placeholder="ej: Control PS4"></div>
+          <div class="field"><label>Unidades por caja</label><input id="emb-unidades" type="number" placeholder="100"></div>
+          <div class="field"><label>Precio unitario</label><input id="emb-precio" type="number" placeholder="7500"></div>
+          <div class="field"><label>Total caja</label><input id="emb-total" type="number" placeholder="750000"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+          <button onclick="cerrarModal('modal-embalaje')" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surf);cursor:pointer">Cancelar</button>
+          <button onclick="guardarEmbalaje()" class="btn btn-primary">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-producto" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center">
+      <div style="background:var(--surf);border-radius:14px;padding:28px;width:100%;max-width:440px;border:1px solid var(--border)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:20px" id="modal-prod-title">Agregar producto</div>
+        <input type="hidden" id="prod-id">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="field"><label>Nombre</label><input id="prod-nombre" placeholder="ej: Hervidor 2L"></div>
+          <div class="field"><label>Descripción</label><input id="prod-desc" placeholder="Opcional"></div>
+          <div class="field"><label>Precio unitario</label><input id="prod-precio-unit" type="number" placeholder="15000"></div>
+          <div class="field"><label>Precio mayorista</label><input id="prod-precio-may" type="number" placeholder="12000"></div>
+          <div class="field"><label>Stock</label><input id="prod-stock" type="number" placeholder="50"></div>
+          <div class="field"><label>Estado</label>
+            <select id="prod-activo">
+              <option value="1">✅ Activo</option>
+              <option value="0">❌ Inactivo</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+          <button onclick="cerrarModal('modal-producto')" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surf);cursor:pointer">Cancelar</button>
+          <button onclick="guardarProducto()" class="btn btn-primary">Guardar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+
+function abrirFormEmbalaje() {
+  $('emb-id').value = '';
+  $('emb-nombre').value = '';
+  $('emb-unidades').value = '';
+  $('emb-precio').value = '';
+  $('emb-total').value = '';
+  $('modal-emb-title').textContent = 'Agregar embalaje';
+  $('modal-embalaje').style.display = 'flex';
+}
+
+function editarEmbalaje(id, nombre, unidades, precio, total) {
+  $('emb-id').value = id;
+  $('emb-nombre').value = nombre;
+  $('emb-unidades').value = unidades;
+  $('emb-precio').value = precio;
+  $('emb-total').value = total;
+  $('modal-emb-title').textContent = 'Editar embalaje';
+  $('modal-embalaje').style.display = 'flex';
+}
+
+async function guardarEmbalaje() {
+  const id = $('emb-id').value;
+  const body = {
+    nombre: $('emb-nombre').value.trim(),
+    unidades: parseInt($('emb-unidades').value) || 0,
+    precio_unitario: parseInt($('emb-precio').value) || 0,
+    total_caja: parseInt($('emb-total').value) || 0,
+  };
+  const url = id ? apiURL('/embalajes/' + id) : apiURL('/embalajes');
+  const method = id ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: getHeaders(), body: JSON.stringify(body) });
+  cerrarModal('modal-embalaje');
+  toast('✅ Embalaje guardado', 'var(--green)');
+  cargarCatalogo();
+}
+
+async function eliminarEmbalaje(id) {
+  if (!confirm('¿Eliminar este embalaje?')) return;
+  await fetch(apiURL('/embalajes/' + id), { method: 'DELETE', headers: getHeaders() });
+  toast('🗑️ Embalaje eliminado');
+  cargarCatalogo();
+}
+
+function abrirFormProducto() {
+  $('prod-id').value = '';
+  $('prod-nombre').value = '';
+  $('prod-desc').value = '';
+  $('prod-precio-unit').value = '';
+  $('prod-precio-may').value = '';
+  $('prod-stock').value = '';
+  $('prod-activo').value = '1';
+  $('modal-prod-title').textContent = 'Agregar producto';
+  $('modal-producto').style.display = 'flex';
+}
+
+function editarProducto(id, nombre, desc, precioUnit, precioMay, stock, activo) {
+  $('prod-id').value = id;
+  $('prod-nombre').value = nombre;
+  $('prod-desc').value = desc;
+  $('prod-precio-unit').value = precioUnit;
+  $('prod-precio-may').value = precioMay;
+  $('prod-stock').value = stock;
+  $('prod-activo').value = activo ? '1' : '0';
+  $('modal-prod-title').textContent = 'Editar producto';
+  $('modal-producto').style.display = 'flex';
+}
+
+async function guardarProducto() {
+  const id = $('prod-id').value;
+  const body = {
+    nombre: $('prod-nombre').value.trim(),
+    descripcion: $('prod-desc').value.trim(),
+    precio_unitario: parseInt($('prod-precio-unit').value) || 0,
+    precio_mayorista: parseInt($('prod-precio-may').value) || 0,
+    stock: parseInt($('prod-stock').value) || 0,
+    activo: $('prod-activo').value === '1',
+  };
+  const url = id ? apiURL('/productos/' + id) : apiURL('/productos');
+  const method = id ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: getHeaders(), body: JSON.stringify(body) });
+  cerrarModal('modal-producto');
+  toast('✅ Producto guardado', 'var(--green)');
+  cargarCatalogo();
+}
+
+async function eliminarProducto(id) {
+  if (!confirm('¿Eliminar este producto?')) return;
+  await fetch(apiURL('/productos/' + id), { method: 'DELETE', headers: getHeaders() });
+  toast('🗑️ Producto eliminado');
+  cargarCatalogo();
+}
+
+</script>
+</body>
+</html>

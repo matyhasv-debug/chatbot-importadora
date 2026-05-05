@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotPanel — Iniciar sesión</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#F7F8FA;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border:1px solid #E4E7EC;border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.06)}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;justify-content:center}
+.logo-icon{width:40px;height:40px;border-radius:12px;background:#1D4ED8;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800}
+.logo-name{font-size:18px;font-weight:700}
+.logo-name span{color:#1D4ED8}
+h1{font-size:20px;font-weight:700;color:#111827;margin-bottom:6px;text-align:center}
+.sub{font-size:13px;color:#9CA3AF;text-align:center;margin-bottom:28px}
+.field{margin-bottom:16px}
+label{font-size:12px;font-weight:600;color:#4B5563;display:block;margin-bottom:6px}
+input{width:100%;padding:10px 14px;border:1px solid #E4E7EC;border-radius:8px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;color:#111827;outline:none;transition:border-color .15s;background:#F7F8FA}
+input:focus{border-color:#1D4ED8;background:#fff}
+.btn{width:100%;padding:12px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;margin-top:8px}
+.btn:hover{background:#1E40AF}
+.btn:disabled{background:#9CA3AF;cursor:not-allowed}
+.error{background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 14px;font-size:13px;color:#DC2626;font-weight:500;margin-top:12px;display:none}
+.footer{text-align:center;margin-top:24px;font-size:11px;color:#9CA3AF}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">B</div>
+    <div class="logo-name">Bot<span>Panel</span></div>
+  </div>
+  <h1>Iniciar sesión</h1>
+  <p class="sub" id="empresa-sub">Accede a tu panel de control</p>
+
+  <div class="field">
+    <label>Usuario</label>
+    <input type="text" id="usuario" placeholder="tu_usuario" autocomplete="username">
+  </div>
+  <div class="field">
+    <label>Contraseña</label>
+    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter') login()">
+  </div>
+  <button class="btn" id="btn-login" onclick="login()">Ingresar</button>
+  <div class="error" id="error-msg"></div>
+  <div class="footer">BotPanel · Powered by IA</div>
+</div>
+
+<script>
+const slug = location.pathname.split('/')[2] || '';
+
+async function login() {
+  const usuario  = document.getElementById('usuario').value.trim();
+  const password = document.getElementById('password').value;
+  const btn      = document.getElementById('btn-login');
+  const error    = document.getElementById('error-msg');
+
+  if (!usuario || !password) {
+    mostrarError('Ingresa tu usuario y contraseña');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  error.style.display = 'none';
+
+  try {
+    const res  = await fetch('/panel/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, usuario, password })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      localStorage.setItem('bp_token', data.token);
+      localStorage.setItem('bp_slug', data.slug);
+      localStorage.setItem('bp_empresa', data.empresa);
+      window.location.href = '/panel/' + slug + '?auth=jwt';
+    } else {
+      mostrarError(data.error || 'Credenciales incorrectas');
+    }
+  } catch (_) {
+    mostrarError('Error de conexión. Intenta de nuevo.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+}
+
+function mostrarError(msg) {
+  const e = document.getElementById('error-msg');
+  e.textContent = msg;
+  e.style.display = 'block';
+}
+</script>
+</body>
+</html>

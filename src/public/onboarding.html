@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotPanel — Onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F8FA;
+  --surf:#FFFFFF;
+  --surf2:#F0F2F5;
+  --border:#E4E7EC;
+  --text:#111827;
+  --text2:#4B5563;
+  --muted:#9CA3AF;
+  --accent:#1D4ED8;
+  --accent-light:#EFF6FF;
+  --green:#059669;
+  --green-light:#ECFDF5;
+  --amber:#D97706;
+  --amber-light:#FFFBEB;
+  --red:#DC2626;
+  --red-light:#FEF2F2;
+}
+html,body{min-height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text)}
+
+.topbar{
+  background:var(--surf);border-bottom:1px solid var(--border);
+  padding:0 24px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:10;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:800}
+.logo-name{font-size:15px;font-weight:700}
+.logo-name span{color:var(--accent)}
+.back-btn{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:6px;transition:color .15s}
+.back-btn:hover{color:var(--accent)}
+
+.container{max-width:900px;margin:0 auto;padding:32px 24px}
+.page-title{font-size:22px;font-weight:800;color:var(--text);margin-bottom:4px}
+.page-sub{font-size:14px;color:var(--muted);margin-bottom:28px}
+
+.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid.full{grid-template-columns:1fr}
+.grid.three{grid-template-columns:1fr 1fr 1fr}
+
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-size:12px;font-weight:600;color:var(--text2)}
+.required{color:var(--red)}
+input,select,textarea{
+  padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;
+  color:var(--text);background:var(--surf2);outline:none;
+  transition:border-color .15s,background .15s;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);background:var(--surf)}
+input::placeholder{color:var(--muted)}
+textarea{resize:vertical;min-height:70px}
+.hint{font-size:11px;color:var(--muted);margin-top:2px}
+
+.btn{font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;border:none;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#1E40AF}
+.btn-primary:disabled{background:var(--muted);cursor:not-allowed}
+.btn-sm{font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--surf);color:var(--text2);font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;transition:all .15s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:var(--red-light)}
+.btn-success{border-color:var(--green);color:var(--green)}
+.btn-success:hover{background:var(--green-light)}
+
+.alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:20px;display:none;align-items:center;gap:10px}
+.alert-ok{background:var(--green-light);color:var(--green);border:1px solid #A7F3D0}
+.alert-err{background:var(--red-light);color:var(--red);border:1px solid #FECACA}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surf2)}
+.badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.badge-on{background:var(--green-light);color:var(--green)}
+.badge-off{background:var(--red-light);color:var(--red)}
+.badge-bsale{background:var(--accent-light);color:var(--accent)}
+.badge-manual{background:#F5F3FF;color:#7C3AED}
+
+.empty-state{text-align:center;padding:40px;color:var(--muted)}
+.empty-state .icon{font-size:32px;margin-bottom:8px}
+.empty-state p{font-size:13px}
+
+.section-divider{height:1px;background:var(--border);margin:20px 0}
+
+#toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;font-size:13px;font-weight:600;padding:12px 18px;border-radius:10px;display:none;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.15);animation:toastIn .2s ease}
+@keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-icon">B</div>
+    <div class="logo-name">Bot<span>Panel</span></div>
+  </div>
+  <a href="/panel" class="back-btn">← Volver al panel admin</a>
+</header>
+
+<div class="container">
+  <div class="page-title">Onboarding de clientes</div>
+  <div class="page-sub">Crea y gestiona los clientes del sistema de chatbot</div>
+
+  <div id="alert" class="alert"></div>
+
+  <!-- CLIENTES ACTIVOS -->
+  <div class="card">
+    <div class="card-title">Clientes registrados</div>
+    <div id="tabla-tenants">
+      <div class="empty-state"><div class="icon">⏳</div><p>Cargando...</p></div>
+    </div>
+  </div>
+
+  <!-- FORMULARIO -->
+  <div class="card">
+    <div class="card-title">Agregar nuevo cliente</div>
+
+    <!-- Empresa -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">🏢 Datos de la empresa</div>
+    <div class="grid" style="margin-bottom:20px">
+      <div class="field">
+        <label>Slug <span class="required">*</span></label>
+        <input id="slug" placeholder="ej: ferreteria-lopez">
+        <span class="hint">Identificador único, sin espacios ni tildes</span>
+      </div>
+      <div class="field">
+        <label>Nombre empresa <span class="required">*</span></label>
+        <input id="empresa_nombre" placeholder="ej: Ferretería López">
+      </div>
+      <div class="field">
+        <label>Dirección</label>
+        <input id="empresa_dir" placeholder="ej: Av. Providencia 123, Santiago">
+      </div>
+      <div class="field">
+        <label>Sitio web</label>
+        <input id="empresa_web" placeholder="ej: www.ferreterialopez.cl">
+      </div>
+      <div class="field">
+        <label>Horario</label>
+        <input id="empresa_horario" placeholder="ej: Lunes a Viernes 9:00–18:00">
+      </div>
+      <div class="field">
+        <label>Abre domingos</label>
+        <select id="empresa_domingos">
+          <option value="0">No</option>
+          <option value="1">Sí</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Asistentes -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">🤖 Asistentes del bot</div>
+    <div class="grid full" style="margin-bottom:20px">
+      <div class="field">
+        <label>Nombres de asistentes (separados por coma)</label>
+        <input id="asistentes" placeholder="ej: Ana, Carlos, María">
+        <span class="hint">El bot se presentará con estos nombres al saludar</span>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Pago -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">💳 Datos de pago</div>
+    <div class="grid" style="margin-bottom:20px">
+      <div class="field">
+        <label>Banco</label>
+        <input id="pago_banco" placeholder="ej: Banco Chile / Mach">
+      </div>
+      <div class="field">
+        <label>Tipo de cuenta</label>
+        <input id="pago_tipo" placeholder="ej: Cuenta Corriente">
+      </div>
+      <div class="field">
+        <label>Número de cuenta</label>
+        <input id="pago_cuenta" placeholder="ej: 123456789">
+      </div>
+      <div class="field">
+        <label>Titular</label>
+        <input id="pago_titular" placeholder="ej: Juan López">
+      </div>
+      <div class="field">
+        <label>RUT titular</label>
+        <input id="pago_rut" placeholder="ej: 12.345.678-9">
+      </div>
+      <div class="field">
+        <label>Email de pago</label>
+        <input id="pago_email" placeholder="ej: pagos@empresa.cl">
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Envío -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">🚚 Envío y garantía</div>
+    <div class="grid three" style="margin-bottom:20px">
+      <div class="field">
+        <label>Courier</label>
+        <input id="envio_courier" placeholder="ej: Starken">
+      </div>
+      <div class="field">
+        <label>Tiempo de envío</label>
+        <input id="envio_tiempo" placeholder="ej: 24-48 horas hábiles">
+      </div>
+      <div class="field">
+        <label>¿Quién paga el envío?</label>
+        <select id="envio_quien_paga">
+          <option value="cliente">Cliente</option>
+          <option value="empresa">Empresa</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Mínimo mayorista (unidades)</label>
+        <input id="mayorista_minimo" type="number" value="3">
+      </div>
+      <div class="field">
+        <label>Garantía (meses)</label>
+        <input id="garantia_meses" type="number" value="6">
+      </div>
+      <div class="field">
+        <label>Condición garantía</label>
+        <input id="garantia_cond" placeholder="ej: Se requiere boleta">
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Credenciales técnicas -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">⚙️ Configuración técnica</div>
+    <div class="grid" style="margin-bottom:20px">
+      <div class="field">
+        <label>WhatsApp Phone Number ID <span class="required">*</span></label>
+        <input id="whatsapp_phone_id" placeholder="ej: 123456789012345">
+        <span class="hint">Del Meta Business Manager</span>
+      </div>
+      <div class="field">
+        <label>WhatsApp Token <span class="required">*</span></label>
+        <input id="whatsapp_token" placeholder="EAABx...">
+      </div>
+      <div class="field">
+        <label>Modo catálogo</label>
+        <select id="modo_catalogo">
+          <option value="bsale">Bsale (con ERP)</option>
+          <option value="manual">Manual (sin ERP)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Bsale Token</label>
+        <input id="bsale_token" placeholder="Solo si usa Bsale">
+      </div>
+      <div class="field">
+        <label>Teléfono del dueño (notificaciones)</label>
+        <input id="notif_telefono" placeholder="ej: 56912345678">
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Acceso al panel -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">🔐 Acceso al panel del cliente</div>
+    <div class="grid" style="margin-bottom:24px">
+      <div class="field">
+        <label>Usuario <span class="required">*</span></label>
+        <input id="panel_usuario" placeholder="ej: ferreterialopez">
+        <span class="hint">El cliente usará este usuario para ingresar</span>
+      </div>
+      <div class="field">
+        <label>Contraseña <span class="required">*</span></label>
+        <input id="panel_password" type="password" placeholder="Mínimo 8 caracteres">
+        <span class="hint">Se encripta automáticamente</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-crear" onclick="crearTenant()">
+      Crear cliente
+    </button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const KEY = new URLSearchParams(location.search).get('key') || '';
+
+function toast(msg, color = '#111827') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.style.display = 'none', 3500);
+}
+
+async function cargarTenants() {
+  try {
+    const res  = await fetch('/panel/api/tenants');
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const el = document.getElementById('tabla-tenants');
+    if (!data.tenants.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">🏢</div><p>No hay clientes aún. Crea el primero abajo.</p></div>';
+      return;
+    }
+
+    el.innerHTML = `<table>
+      <thead><tr>
+        <th>Empresa</th>
+        <th>Slug / URL panel</th>
+        <th>Modo</th>
+        <th>Estado</th>
+        <th>Creado</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${data.tenants.map(t => `
+        <tr>
+          <td><strong>${t.empresa_nombre}</strong></td>
+          <td>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">${t.slug}</span><br>
+            <a href="/panel/${t.slug}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">/panel/${t.slug} ↗</a>
+          </td>
+          <td><span class="badge badge-${t.modo_catalogo || 'bsale'}">${t.modo_catalogo || 'bsale'}</span></td>
+          <td><span class="badge ${t.activo ? 'badge-on' : 'badge-off'}">${t.activo ? '✅ Activo' : '❌ Inactivo'}</span></td>
+          <td style="color:var(--muted);font-size:12px">${t.creado_en?.slice(0,10) || '-'}</td>
+          <td>
+            <button class="btn-sm ${t.activo ? 'btn-danger' : 'btn-success'}"
+              onclick="toggleTenant(${t.id}, this)">
+              ${t.activo ? 'Desactivar' : 'Activar'}
+            </button>
+          </td>
+        </tr>
+      `).join('')}</tbody>
+    </table>`;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function toggleTenant(id, btn) {
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`/panel/api/tenants/${id}/toggle`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) { cargarTenants(); toast('✅ Estado actualizado', '#059669'); }
+    else btn.disabled = false;
+  } catch (_) { btn.disabled = false; }
+}
+
+async function crearTenant() {
+  const btn = document.getElementById('btn-crear');
+  btn.disabled = true;
+  btn.textContent = 'Creando...';
+
+  const usuario  = document.getElementById('panel_usuario').value.trim();
+  const password = document.getElementById('panel_password').value.trim();
+
+  if (!usuario || !password) {
+    toast('❌ Usuario y contraseña son requeridos', '#DC2626');
+    btn.disabled = false;
+    btn.textContent = 'Crear cliente';
+    return;
+  }
+
+  if (password.length < 8) {
+    toast('❌ La contraseña debe tener al menos 8 caracteres', '#DC2626');
+    btn.disabled = false;
+    btn.textContent = 'Crear cliente';
+    return;
+  }
+
+  const asistentesRaw = document.getElementById('asistentes').value;
+  const asistentes = asistentesRaw.split(',').map(a => a.trim()).filter(Boolean);
+
+  const body = {
+    slug:              document.getElementById('slug').value.trim(),
+    empresa_nombre:    document.getElementById('empresa_nombre').value.trim(),
+    empresa_dir:       document.getElementById('empresa_dir').value.trim(),
+    empresa_web:       document.getElementById('empresa_web').value.trim(),
+    empresa_horario:   document.getElementById('empresa_horario').value.trim(),
+    empresa_domingos:  document.getElementById('empresa_domingos').value === '1',
+    asistentes,
+    pago_banco:        document.getElementById('pago_banco').value.trim(),
+    pago_tipo:         document.getElementById('pago_tipo').value.trim(),
+    pago_cuenta:       document.getElementById('pago_cuenta').value.trim(),
+    pago_titular:      document.getElementById('pago_titular').value.trim(),
+    pago_rut:          document.getElementById('pago_rut').value.trim(),
+    pago_email:        document.getElementById('pago_email').value.trim(),
+    envio_courier:     document.getElementById('envio_courier').value.trim(),
+    envio_tiempo:      document.getElementById('envio_tiempo').value.trim(),
+    envio_quien_paga:  document.getElementById('envio_quien_paga').value,
+    mayorista_minimo:  parseInt(document.getElementById('mayorista_minimo').value) || 3,
+    garantia_meses:    parseInt(document.getElementById('garantia_meses').value) || 6,
+    garantia_cond:     document.getElementById('garantia_cond').value.trim(),
+    whatsapp_phone_id: document.getElementById('whatsapp_phone_id').value.trim(),
+    whatsapp_token:    document.getElementById('whatsapp_token').value.trim(),
+    bsale_token:       document.getElementById('bsale_token').value.trim(),
+    notif_telefono:    document.getElementById('notif_telefono').value.trim(),
+    modo_catalogo:     document.getElementById('modo_catalogo').value,
+    panel_key:         '',
+  };
+
+  if (!body.slug || !body.empresa_nombre || !body.whatsapp_phone_id || !body.whatsapp_token) {
+    toast('❌ Faltan campos obligatorios (slug, empresa, WhatsApp)', '#DC2626');
+    btn.disabled = false;
+    btn.textContent = 'Crear cliente';
+    return;
+  }
+
+  try {
+    const res  = await fetch('/panel/api/tenants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      // Crear credenciales JWT
+      await fetch(`/panel/api/tenants/${data.tenantId}/credenciales?key=${KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, password })
+      });
+
+      toast(`✅ Cliente creado — Panel: /panel/${body.slug}`, '#059669');
+      cargarTenants();
+
+      // Limpiar formulario
+      document.querySelectorAll('input').forEach(i => {
+        if (i.id !== 'mayorista_minimo' && i.id !== 'garantia_meses') i.value = '';
+      });
+      document.getElementById('mayorista_minimo').value = '3';
+      document.getElementById('garantia_meses').value = '6';
+    } else {
+      toast(`❌ Error: ${data.error}`, '#DC2626');
+    }
+  } catch (err) {
+    toast('❌ Error de conexión', '#DC2626');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Crear cliente';
+}
+
+cargarTenants();
+</script>
+</body>
+</html>
