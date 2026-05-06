@@ -83,15 +83,15 @@ try {
 
 function esModoHumano(telefono) { return modoHumano.has(telefono); }
 
-function setModoHumano(telefono, activo) {
+function setModoHumano(telefono, activo, tenantId = null) {
   if (activo) modoHumano.add(telefono);
   else        modoHumano.delete(telefono);
 
   try {
     db.prepare(`
-      INSERT INTO clientes (telefono, modo_humano) VALUES (?, ?)
+      INSERT INTO clientes (telefono, modo_humano, tenant_id) VALUES (?, ?, ?)
       ON CONFLICT(telefono) DO UPDATE SET modo_humano = excluded.modo_humano
-    `).run(telefono, activo ? 1 : 0);
+    `).run(telefono, activo ? 1 : 0, tenantId);
   } catch (err) {
     console.error('[Panel] Error persistiendo modo_humano:', err.message);
   }
@@ -100,14 +100,14 @@ function setModoHumano(telefono, activo) {
 }
 
 // ─── Actualizar estado de cliente ─────────────────────────────────────────────
-function actualizarEstadoCliente(telefono, estado) {
+function actualizarEstadoCliente(telefono, estado, tenantId = null) {
   if (!ESTADOS[estado]) return false;
   try {
     db.prepare(`
-      INSERT INTO clientes (telefono, estado)
-      VALUES (?, ?)
+      INSERT INTO clientes (telefono, estado, tenant_id)
+      VALUES (?, ?, ?)
       ON CONFLICT(telefono) DO UPDATE SET estado = excluded.estado
-    `).run(telefono, estado);
+    `).run(telefono, estado, tenantId);
     emitirEvento('estado_cliente', { telefono, estado });
     return true;
   } catch (err) {
@@ -116,9 +116,13 @@ function actualizarEstadoCliente(telefono, estado) {
   }
 }
 
-function getEstadoCliente(telefono) {
+function getEstadoCliente(telefono, tenantId = null) {
   try {
-    return db.prepare(`SELECT estado FROM clientes WHERE telefono = ?`).get(telefono)?.estado || 'en_conversacion';
+    const q = tenantId
+      ? `SELECT estado FROM clientes WHERE telefono = ? AND tenant_id = ?`
+      : `SELECT estado FROM clientes WHERE telefono = ?`;
+    const params = tenantId ? [telefono, tenantId] : [telefono];
+    return db.prepare(q).get(...params)?.estado || 'en_conversacion';
   } catch (_) { return 'en_conversacion'; }
 }
 
@@ -259,16 +263,20 @@ router.post('/api/estado-cliente', verificarAdmin, express.json(), async (req, r
   if (!ESTADOS[estado]) return res.status(400).json({ ok: false, error: 'Estado inválido' });
   const ok = actualizarEstadoCliente(telefono, estado);
   if (ok && (estado === 'pagado' || estado === 'despachado')) {
-    const DUENO_TEL = process.env.DUENO_WHATSAPP;
+    const conv    = db.prepare(`SELECT tenant_id FROM conversaciones WHERE telefono = ? ORDER BY creado_en DESC LIMIT 1`).get(telefono);
+    const tenant  = conv?.tenant_id ? db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(conv.tenant_id) : null;
+    const DUENO_TEL = tenant?.notif_telefono || process.env.DUENO_WHATSAPP;
     if (DUENO_TEL) {
+      const phoneId = tenant?.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
+      const tok     = tenant?.whatsapp_token    || process.env.WHATSAPP_TOKEN;
       const cliente = db.prepare(`SELECT nombre FROM clientes WHERE telefono = ?`).get(telefono);
       const nombre  = cliente?.nombre || telefono;
       try {
         await axios.post(
-          `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+          `https://graph.facebook.com/v18.0/${phoneId}/messages`,
           { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL,
             type: 'text', text: { preview_url: false, body: `${ESTADOS[estado].emoji} *Estado actualizado*\nCliente: ${nombre} (${telefono})\nNuevo estado: *${ESTADOS[estado].label}*` } },
-          { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' } }
+          { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
         );
       } catch (err) { console.error('[Panel] Error notificando dueño:', err.message); }
     }
@@ -289,15 +297,21 @@ router.post('/api/responder', verificarAdmin, express.json(), async (req, res) =
   const { telefono, mensaje } = req.body;
   if (!telefono || !mensaje) return res.status(400).json({ ok: false, error: 'Faltan datos' });
   try {
+    // Buscar tenant de la conversación para usar credenciales correctas
+    const conv   = db.prepare(`SELECT tenant_id, nombre FROM conversaciones WHERE telefono = ? ORDER BY creado_en DESC LIMIT 1`).get(telefono);
+    const tenant = conv?.tenant_id ? db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(conv.tenant_id) : null;
+    const phoneId = tenant?.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
+    const tok     = tenant?.whatsapp_token    || process.env.WHATSAPP_TOKEN;
+    const nombre  = conv?.nombre || 'Cliente';
+
     await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+      `https://graph.facebook.com/v18.0/${phoneId}/messages`,
       { messaging_product: 'whatsapp', recipient_type: 'individual', to: telefono,
         type: 'text', text: { preview_url: false, body: mensaje } },
-      { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' } }
+      { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
     );
-    const nombre = db.prepare(`SELECT nombre FROM conversaciones WHERE telefono = ? LIMIT 1`).get(telefono)?.nombre || 'Cliente';
-    db.prepare(`INSERT INTO conversaciones (telefono, nombre, rol, mensaje) VALUES (?, ?, ?, ?)`)
-      .run(telefono, nombre, 'assistant', `[HUMANO] ${mensaje}`);
+    db.prepare(`INSERT INTO conversaciones (telefono, nombre, rol, mensaje, tenant_id) VALUES (?, ?, ?, ?, ?)`)
+      .run(telefono, nombre, 'assistant', `[HUMANO] ${mensaje}`, conv?.tenant_id || null);
     emitirEvento('mensaje', {
       mensaje: { telefono, nombre, rol: 'assistant', mensaje: `[HUMANO] ${mensaje}`, creado_en: new Date().toISOString() },
     });
@@ -468,7 +482,7 @@ router.post('/:slug/api/modo-humano', express.json(), (req, res) => {
   if (!verificarAuthCliente(req, res, tenant)) return;
   const { telefono, activo } = req.body;
   if (!telefono) return res.status(400).json({ ok: false });
-  setModoHumano(telefono, !!activo);
+  setModoHumano(telefono, !!activo, tenant.id);
   res.json({ ok: true, activo: !!activo });
 });
 

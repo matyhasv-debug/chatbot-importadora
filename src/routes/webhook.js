@@ -1,9 +1,10 @@
 // src/routes/webhook.js
-const express = require('express');
-const crypto  = require('crypto');
-const router  = express.Router();
+const express       = require('express');
+const crypto        = require('crypto');
+const router        = express.Router();
 const { parsearWebhook, marcarLeido } = require('../services/whatsappService');
 const { procesarMensaje }             = require('../services/chatbotController');
+const tenantService = require('../services/tenantService');
 
 // ─── Verificar firma HMAC-SHA256 de Meta ──────────────────────────────────────
 function verificarFirma(req, res, next) {
@@ -57,8 +58,11 @@ router.post('/', verificarFirma, async (req, res) => {
     const data = parsearWebhook(req.body);
     if (!data) return;
 
-    // Marcar como leído
-    await marcarLeido(data.messageId);
+    // Marcar como leído con las credenciales del tenant correcto
+    const cfg     = tenantService.getConfigByPhoneId(data.phoneNumberId);
+    const phoneId = cfg?.credenciales?.whatsappPhoneId;
+    const token   = cfg?.credenciales?.whatsappToken;
+    await marcarLeido(data.messageId, phoneId, token);
 
     // Procesar de forma asíncrona
     await procesarMensaje(data);

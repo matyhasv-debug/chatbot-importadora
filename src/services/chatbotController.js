@@ -180,7 +180,7 @@ async function procesarMensaje(data) {
       console.log(`[BOT] ⏸️  Modo humano activo para ${telefono} — bot pausado`);
       if (texto) guardarMensaje(telefono, nombre, 'user', texto, tenantId);
       if (mediaInfo && detectarComprobante(data)) {
-        actualizarEstadoCliente(telefono, 'pago_pendiente');
+        actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
       }
       return;
     }
@@ -194,12 +194,12 @@ async function procesarMensaje(data) {
     guardarMensaje(telefono, nombre, 'user', textoParaGuardar, tenantId);
 
     if (texto && detectarPagoEnTexto(texto)) {
-      actualizarEstadoCliente(telefono, 'pago_pendiente');
+      actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
       followUpService.cancelarSeguimientos(telefono, tenantId);
       console.log(`[BOT] 💰 Pago detectado de ${telefono}`);
       await notificarDueno('pago_detectado', telefono, nombre, texto.slice(0, 100), config);
     } else if (mediaInfo && detectarComprobante(data)) {
-      actualizarEstadoCliente(telefono, 'pago_pendiente');
+      actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
       followUpService.cancelarSeguimientos(telefono, tenantId);
       console.log(`[BOT] 🧾 Comprobante recibido de ${telefono}`);
       await notificarDueno('comprobante', telefono, nombre, '', config);
@@ -309,7 +309,7 @@ async function procesarMensaje(data) {
 
       case 'BUSCAR_PRODUCTO': {
         setEtapa(telefono, tenantId, 'explorando');
-        actualizarEstadoCliente(telefono, 'consultando');
+        actualizarEstadoCliente(telefono, 'consultando', tenantId);
         const producto = await geminiService.extraerProductoConIA(texto, historial);
         if (!producto || producto.length < 3) {
           respuesta = await geminiService.generarRespuesta(texto, historial, '', telefono, config);
@@ -364,7 +364,7 @@ async function procesarMensaje(data) {
       }
 
       case 'HACER_PEDIDO': {
-        actualizarEstadoCliente(telefono, 'cotizado');
+        actualizarEstadoCliente(telefono, 'cotizado', tenantId);
         const cantidad = extraerCantidad(texto);
         const producto = await geminiService.extraerProductoConIA(texto, historial);
         const esMayor  = cantidad >= bsaleService.MINIMO_MAYORISTA;
