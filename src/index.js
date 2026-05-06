@@ -82,7 +82,9 @@ const webhookLimiter = rateLimit({
 });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
@@ -112,12 +114,25 @@ app.get('/', (req, res) => {
 });
 
 // ─── Arrancar servidor ────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log('\n' + '═'.repeat(50));
   console.log(`🤖 Chatbot WhatsApp + Bsale iniciado`);
   console.log(`📡 Puerto: ${PORT}`);
   console.log(`📊 Panel: http://localhost:${PORT}/panel`);
   console.log('═'.repeat(50) + '\n');
+});
+
+// ─── Graceful shutdown (Railway / Docker envían SIGTERM al reiniciar) ─────────
+process.on('SIGTERM', () => {
+  console.log('[SIGTERM] Cerrando servidor — esperando requests en curso...');
+  server.close(() => {
+    console.log('[SIGTERM] Servidor cerrado limpiamente');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('[SIGTERM] Timeout — forzando cierre');
+    process.exit(1);
+  }, 10_000);
 });
 
 // ─── Cron de follow-ups ───────────────────────────────────────────────────────

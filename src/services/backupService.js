@@ -1,9 +1,10 @@
 // src/services/backupService.js
 const { google } = require('googleapis');
+const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = '/app/data/chatbot.db';
-const FOLDER_ID = '11_YD6WKHVKp1FOuwqmrwzCm4ON-B2OOR';
+const DB_PATH   = process.env.DB_PATH || path.join(__dirname, '../../data/chatbot.db');
+const FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
 async function getDriveClient() {
   const credenciales = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -59,6 +60,10 @@ async function subirBackupDrive() {
 }
 
 function iniciarBackupAutomatico() {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !FOLDER_ID) {
+    console.log('[Backup] ⏭️ Backup a Drive no configurado (GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_DRIVE_FOLDER_ID ausentes)');
+    return;
+  }
   const INTERVALO = 24 * 60 * 60 * 1000;
   console.log('[Backup] 🗄️ Backup automático activado (cada 24h)');
   subirBackupDrive();
