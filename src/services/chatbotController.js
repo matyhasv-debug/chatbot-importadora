@@ -103,7 +103,7 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
       await notificarDueno('error_bot', telefono, nombre,
         `❓ Cliente buscó "${query}" y no se encontró en catálogo.`, config);
     }
-    return `No encontramos "${query}" en nuestro catálogo actualmente.`;
+    return null;
   }
 
   // modo === 'bsale' (default)
@@ -124,7 +124,7 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
     await notificarDueno('error_bot', telefono, nombre,
       `❓ Cliente buscó "${query}" y no se encontró en Bsale.`, config);
   }
-  return `No encontramos "${query}" en nuestro catálogo actualmente.`;
+  return null;
 }
 
 // ─── Detección automática de pago ─────────────────────────────────────────────
@@ -275,7 +275,18 @@ async function procesarMensaje(data) {
       case 'SALUDO': {
         const esConocido = db.prepare('SELECT 1 FROM clientes WHERE telefono = ? AND tenant_id = ?').get(telefono, tenantId);
         if (esConocido) {
-          respuesta = await geminiService.generarRespuesta(texto, historial, '', telefono, config);
+          const productoEnSaludo = await geminiService.extraerProductoConIA(texto, historial);
+          if (productoEnSaludo && productoEnSaludo.length > 2) {
+            const ctx = await obtenerContextoBsale(productoEnSaludo, false, telefono, nombre, config);
+            if (ctx === null) {
+              respuesta = `¡Hola! 👋 No encontramos "${productoEnSaludo}" en nuestro catálogo actualmente. ¿Buscas otro producto o necesitas algo más? 😊`;
+            } else {
+              respuesta = await geminiService.generarRespuesta(texto, historial, ctx, telefono, config);
+              followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
+            }
+          } else {
+            respuesta = await geminiService.generarRespuesta(texto, historial, '', telefono, config);
+          }
         } else {
           const nombreAsistente = geminiService.obtenerNombreAsistente(telefono, config.asistentes);
           respuesta = `¡Hola ${nombre.split(' ')[0]}! 👋😊 Bienvenido a *${empresa.nombre}*.\nSoy ${nombreAsistente}, tu asistente virtual. ¿Qué estás buscando hoy?`;
@@ -305,7 +316,11 @@ async function procesarMensaje(data) {
           break;
         }
         contextoExtra = await obtenerContextoBsale(producto, false, telefono, nombre, config);
-        respuesta     = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+        if (contextoExtra === null) {
+          respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Buscas otro producto o necesitas algo más? 😊`;
+          break;
+        }
+        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
         break;
       }
@@ -322,7 +337,11 @@ async function procesarMensaje(data) {
           followUpService.programarSeguimiento(telefono, 'follow_up_precio', 240, tenantId);
         } else {
           contextoExtra = await obtenerContextoBsale(producto, true, telefono, nombre, config);
-          respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+          if (contextoExtra === null) {
+            respuesta = `No encontramos "${producto || 'ese embalaje'}" en nuestro catálogo. ¿Buscas otro producto? 😊`;
+          } else {
+            respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+          }
         }
         break;
       }
@@ -332,6 +351,10 @@ async function procesarMensaje(data) {
         const producto = await geminiService.extraerProductoConIA(texto, historial);
         const esMayor  = cantidad >= bsaleService.MINIMO_MAYORISTA;
         contextoExtra  = await obtenerContextoBsale(producto, esMayor, telefono, nombre, config);
+        if (contextoExtra === null) {
+          respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Buscas otro producto? 😊`;
+          break;
+        }
         contextoExtra += esMayor
           ? `\n\nEl cliente quiere ${cantidad} unidades — mostrar precio mayorista.`
           : `\n\nEl cliente quiere ${cantidad} unidades — precio unitario aplica. Mencionar que desde ${bsaleService.MINIMO_MAYORISTA} unidades hay precio mayorista.`;
@@ -345,7 +368,14 @@ async function procesarMensaje(data) {
         const cantidad = extraerCantidad(texto);
         const producto = await geminiService.extraerProductoConIA(texto, historial);
         const esMayor  = cantidad >= bsaleService.MINIMO_MAYORISTA;
-        if (producto.length > 1) contextoExtra = await obtenerContextoBsale(producto, esMayor, telefono, nombre, config);
+        if (producto.length > 1) {
+          const bsaleCtx = await obtenerContextoBsale(producto, esMayor, telefono, nombre, config);
+          if (bsaleCtx === null) {
+            respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Puedes confirmar el nombre exacto del producto? 😊`;
+            break;
+          }
+          contextoExtra = bsaleCtx;
+        }
         contextoExtra +=
           `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
 INSTRUCCIÓN: Muestra el resumen del pedido:
@@ -366,7 +396,10 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
       case 'CONFIRMAR_PEDIDO': {
         if (etapa === 'cotizando') {
           const prodAnterior = await geminiService.extraerProductoConIA(texto || '', historial);
-          if (prodAnterior.length > 1) contextoExtra = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
+          if (prodAnterior.length > 1) {
+            const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
+            if (bsaleCtx !== null) contextoExtra = bsaleCtx;
+          }
           contextoExtra +=
             '\n\nEl cliente confirmó el pedido. Entrega los datos de transferencia completos.\n' +
             `Menciona que el envío se paga aparte al recibir (${envio.courier}). Pide el comprobante por WhatsApp.`;
@@ -377,9 +410,11 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
         } else {
           const prodAnterior = await geminiService.extraerProductoConIA(texto || '', historial);
           if (prodAnterior && prodAnterior.length > 2) {
-            contextoExtra = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
-            contextoExtra += `\n\nEl cliente quiere ${texto} unidad(es) de "${prodAnterior}". Confirma disponibilidad, muestra resumen del pedido con precio y pregunta "¿Confirmamos? 😊". NO des datos bancarios todavía.`;
-            setEtapa(telefono, tenantId, 'cotizando');
+            const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
+            if (bsaleCtx !== null) {
+              contextoExtra = bsaleCtx + `\n\nEl cliente quiere ${texto} unidad(es) de "${prodAnterior}". Confirma disponibilidad, muestra resumen del pedido con precio y pregunta "¿Confirmamos? 😊". NO des datos bancarios todavía.`;
+              setEtapa(telefono, tenantId, 'cotizando');
+            }
           }
           respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
         }

@@ -208,7 +208,7 @@ Responde SOLO con la categoría exacta, sin explicación.`;
 async function detectarIntencion(mensaje, historialDB = []) {
   if (/^\d+$/.test(mensaje.trim()))                                                          return 'CONFIRMAR';
   if (/caja|bulto|embalaje|por mayor|cajas/i.test(mensaje))                                  return 'PRECIO_EMBALAJE';
-  if (/^(hola|buenas tardes|buenos días|buenas noches|hey|wenas|buen día)\b/i.test(mensaje)) return 'SALUDO';
+  if (/^(hola|buenas tardes|buenos días|buenas noches|hey|wenas|buen día)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'SALUDO';
   if (/transfer|número.*cuenta|datos.*banco|rut.*pago|cómo.*pago|como.*pago/i.test(mensaje)) return 'TRANSFERENCIA';
   if (/horario|abren|cierran|atienden|qué días|ubicaci[oó]n|direcci[oó]n/i.test(mensaje))    return 'HORARIO';
   if (/garantía|cambio|devolución|falla|defecto|no funciona/i.test(mensaje))                 return 'GARANTIA';
@@ -281,7 +281,7 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
 
   const contenidoFinal = (contextoExtra && contextoExtra.length > 5)
     ? `[STOCK TIENDA BSALE]:\n${contextoExtra}\n\n[Consulta Cliente]: ${mensajeUsuario}`
-    : mensajeUsuario;
+    : `⚠️ INSTRUCCIÓN CRÍTICA: No tienes datos de stock en esta consulta. NUNCA inventes productos, precios ni disponibilidad. Si el cliente pregunta por un producto específico, responde: "Déjame consultar con bodega y te confirmo en un momento 👌"\n\n[Consulta Cliente]: ${mensajeUsuario}`;
 
   messages.push({ role: 'user', content: contenidoFinal });
 
