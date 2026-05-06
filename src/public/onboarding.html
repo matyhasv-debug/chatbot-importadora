@@ -309,7 +309,7 @@ function toast(msg, color = '#111827') {
 
 async function cargarTenants() {
   try {
-    const res  = await fetch('/panel/api/tenants');
+    const res  = await fetch(`/panel/api/tenants?key=${KEY}`);
     const data = await res.json();
     if (!data.ok) return;
 
@@ -355,7 +355,7 @@ async function cargarTenants() {
 async function toggleTenant(id, btn) {
   btn.disabled = true;
   try {
-    const res  = await fetch(`/panel/api/tenants/${id}/toggle`, { method: 'POST' });
+    const res  = await fetch(`/panel/api/tenants/${id}/toggle?key=${KEY}`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) { cargarTenants(); toast('✅ Estado actualizado', '#059669'); }
     else btn.disabled = false;
@@ -423,7 +423,7 @@ async function crearTenant() {
   }
 
   try {
-    const res  = await fetch('/panel/api/tenants', {
+    const res  = await fetch(`/panel/api/tenants?key=${KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
