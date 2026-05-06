@@ -100,6 +100,14 @@ CREATE INDEX IF NOT EXISTS idx_productos_tenant ON tenant_productos(tenant_id);
     total_caja      REAL
   );
 
+  CREATE TABLE IF NOT EXISTS tenant_followups (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    tipo      TEXT NOT NULL,
+    mensaje   TEXT NOT NULL,
+    UNIQUE(tenant_id, tipo)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conv_telefono    ON conversaciones(telefono);
   CREATE INDEX IF NOT EXISTS idx_pedidos_telefono ON pedidos(telefono);
   CREATE INDEX IF NOT EXISTS idx_pedidos_estado   ON pedidos(estado);

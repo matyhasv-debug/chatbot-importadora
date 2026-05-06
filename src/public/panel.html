@@ -714,43 +714,96 @@ async function cargarMetricas() {
   }
 }
 
+const FU_TIPOS = {
+  follow_up_precio:   { l: 'Follow-up de precio',   bg: 'var(--accent-light)', c: 'var(--accent)',  icon: '💬' },
+  pago_recordatorio:  { l: 'Recordatorio de pago',   bg: 'var(--amber-light)',  c: 'var(--amber)',   icon: '💳' },
+  post_venta:         { l: 'Post-venta',              bg: 'var(--green-light)',  c: 'var(--green)',   icon: '🎉' },
+  carrito_abandonado: { l: 'Carrito abandonado',      bg: 'var(--purple-light)', c: 'var(--purple)',  icon: '👻' },
+};
+
+async function guardarTemplate(tipo) {
+  const ta  = $('fu-ta-' + tipo);
+  const btn = $('fu-btn-' + tipo);
+  if (!ta || !btn) return;
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const res = await fetch(apiURL('/followup-templates/' + tipo), {
+      method: 'PUT', headers: getHeaders(),
+      body: JSON.stringify({ mensaje: ta.value.trim() }),
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(d.revertido ? '↩️ Vuelto al mensaje predeterminado' : '✅ Mensaje guardado', 'var(--green)');
+      const lbl = $('fu-estado-' + tipo);
+      if (lbl) lbl.textContent = d.revertido ? 'Predeterminado' : 'Personalizado';
+    } else toast('❌ Error al guardar', 'var(--red)');
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+  btn.disabled = false; btn.textContent = 'Guardar';
+}
+
 async function cargarFollowUps() {
   try {
-    const data = await fetch(apiURL('/followups'), { headers: getHeaders() }).then(r => r.json());
-    const fus = data.followups || [];
-    const badge = $('fu-badge');
+    const [dr, tr] = await Promise.all([
+      fetch(apiURL('/followups'), { headers: getHeaders() }).then(r => r.json()),
+      ES_CLIENTE ? fetch(apiURL('/followup-templates'), { headers: getHeaders() }).then(r => r.json()) : Promise.resolve(null),
+    ]);
+
+    const fus    = dr.followups || [];
+    const tmpls  = tr?.templates || null;
+    const badge  = $('fu-badge');
     if (fus.length) { badge.textContent = fus.length; badge.style.display = 'inline'; }
     else badge.style.display = 'none';
 
-    const tipos = {
-      follow_up_precio:   { l: 'Follow-up precio',  bg: 'var(--accent-light)', c: 'var(--accent)' },
-      pago_recordatorio:  { l: 'Recordatorio pago',  bg: 'var(--amber-light)', c: 'var(--amber)' },
-      post_venta:         { l: 'Post-venta',          bg: 'var(--green-light)', c: 'var(--green)' },
-      carrito_abandonado: { l: 'Carrito abandonado',  bg: 'var(--purple-light)', c: 'var(--purple)' },
-    };
-
-    if (!fus.length) {
-      $('fu-content').innerHTML = '<div class="empty" style="padding:60px 0"><div class="empty-icon">⏰</div><p>No hay follow-ups pendientes</p></div>';
-      return;
+    let pendientesHTML = '';
+    if (fus.length) {
+      pendientesHTML = `
+        <div class="section-title">Programados (${fus.length})</div>
+        <div class="fu-list">
+          ${fus.map(f => {
+            const t = FU_TIPOS[f.tipo] || { l: f.tipo, bg: 'var(--surf2)', c: 'var(--muted)', icon: '⏰' };
+            const diff = new Date(f.enviar_en) - new Date();
+            const min  = Math.round(diff / 60000);
+            const ts   = diff < 0 ? '<span style="color:var(--amber);font-weight:700">Enviando ahora</span>'
+              : min < 60 ? `En ${min} min` : `En ${Math.round(min / 60)} hrs`;
+            return `<div class="fu-item">
+              <span class="fu-tipo" style="background:${t.bg};color:${t.c};border:1px solid ${t.c}">${t.icon} ${t.l}</span>
+              <div class="fu-info">
+                <div class="fu-nombre">${esc(f.nombre || f.telefono)}</div>
+                <div class="fu-tiempo">${ts} · ${f.telefono}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    } else {
+      pendientesHTML = '<div class="empty" style="padding:32px 0"><div class="empty-icon">⏰</div><p>No hay follow-ups pendientes</p></div>';
     }
-    $('fu-content').innerHTML = `
-      <div class="section-title">Follow-ups programados (${fus.length})</div>
-      <div class="fu-list">
-        ${fus.map(f => {
-          const t = tipos[f.tipo] || { l: f.tipo, bg: 'var(--surf2)', c: 'var(--muted)' };
-          const diff = new Date(f.enviar_en) - new Date();
-          const min = Math.round(diff / 60000);
-          const ts = diff < 0 ? '<span style="color:var(--amber);font-weight:700">Enviando ahora</span>'
-            : min < 60 ? `En ${min} min` : `En ${Math.round(min / 60)} hrs`;
-          return `<div class="fu-item">
-            <span class="fu-tipo" style="background:${t.bg};color:${t.c};border:1px solid ${t.c}">${t.l}</span>
-            <div class="fu-info">
-              <div class="fu-nombre">${esc(f.nombre || f.telefono)}</div>
-              <div class="fu-tiempo">${ts} · ${f.telefono}</div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
+
+    let templatesHTML = '';
+    if (tmpls) {
+      templatesHTML = `
+        <div class="section-title" style="margin-top:28px">Mensajes automáticos</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Usa <code style="background:var(--surf2);padding:1px 5px;border-radius:4px;font-size:11px">{{nombre}}</code> para insertar el nombre del cliente. Deja vacío para restaurar el predeterminado.</p>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          ${Object.entries(FU_TIPOS).map(([tipo, meta]) => {
+            const t   = tmpls[tipo] || {};
+            const val = t.custom || '';
+            const ph  = t.predeterminado || '';
+            const esCustom = !!t.custom;
+            return `<div style="background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <span style="font-size:13px;font-weight:700">${meta.icon} ${meta.l}</span>
+                <span id="fu-estado-${tipo}" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${esCustom ? meta.bg : 'var(--surf2)'};color:${esCustom ? meta.c : 'var(--muted)'}">${esCustom ? 'Personalizado' : 'Predeterminado'}</span>
+              </div>
+              <textarea id="fu-ta-${tipo}" style="width:100%;min-height:80px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surf2);resize:vertical;outline:none" placeholder="${esc(ph)}">${esc(val)}</textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:8px">
+                <button id="fu-btn-${tipo}" onclick="guardarTemplate('${tipo}')" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 16px;border-radius:8px;cursor:pointer;border:none;background:var(--accent);color:#fff">Guardar</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    $('fu-content').innerHTML = pendientesHTML + templatesHTML;
   } catch (_) {}
 }
 

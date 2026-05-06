@@ -68,28 +68,41 @@ function obtenerUltimoProducto(telefono, tenantId = null) {
   return null;
 }
 
+// ─── Mensajes predeterminados ─────────────────────────────────────────────────
+const MENSAJES_DEFAULT = {
+  follow_up_precio: [
+    `¡Hola {{nombre}}! 👋 ¿Pudiste decidirte por el producto que consultaste?\n\nTenemos stock disponible hoy 📦 ¿Te ayudo a cerrarlo? 😊`,
+    `Hola {{nombre}} 😊 Solo quería avisarte que aún tenemos disponible el producto que cotizaste.\n\n¿Te quedó alguna duda sobre el precio o el envío? Con gusto te ayudo 🚀`,
+  ],
+  carrito_abandonado: [
+    `Hola {{nombre}}! 👋 Vi que estuviste viendo nuestros productos.\n\n¿Hay algo en lo que pueda ayudarte? A veces conviene aclarar dudas antes de decidir 😊`,
+  ],
+  post_venta: [
+    `¡Hola {{nombre}}! 🎉 ¿Cómo llegó tu pedido? Esperamos que estés súper contento con tu compra.\n\nSi necesitas algo o tienes alguna consulta, aquí estamos 💪`,
+  ],
+  pago_recordatorio: [
+    `Hola {{nombre}} 👋 Notamos que aún no hemos recibido tu comprobante de transferencia.\n\n¿Necesitas los datos bancarios de nuevo? Con gusto te los envío 💳`,
+  ],
+};
+
 // ─── Generar mensajes de seguimiento según tipo ───────────────────────────────
-function generarMensaje(tipo, telefono, nombre = '') {
+function generarMensaje(tipo, telefono, nombre = '', tenantId = null) {
   const primerNombre = (nombre || 'amigo').split(' ')[0];
 
-  const mensajes = {
-    follow_up_precio: [
-      `¡Hola ${primerNombre}! 👋 ¿Pudiste decidirte por el producto que consultaste?\n\nTenemos stock disponible hoy 📦 y el envío sale directo por Blue Express. ¿Te ayudo a cerrarlo? 😊`,
-      `Hola ${primerNombre} 😊 Solo quería avisarte que aún tenemos disponible el producto que cotizaste.\n\n¿Te quedó alguna duda sobre el precio o el envío? Con gusto te ayudo 🚀`,
-    ],
-    carrito_abandonado: [
-      `Hola ${primerNombre}! 👋 Vi que estuviste viendo nuestros productos.\n\n¿Hay algo en lo que pueda ayudarte? A veces conviene aclarar dudas antes de decidir 😊`,
-    ],
-    post_venta: [
-      `¡Hola ${primerNombre}! 🎉 ¿Cómo llegó tu pedido? Esperamos que estés súper contento con tu compra.\n\nSi necesitas algo o tienes alguna consulta, aquí estamos 💪\n\n¿Nos dejarías una reseña? Tu opinión nos ayuda mucho 🙏`,
-    ],
-    pago_recordatorio: [
-      `Hola ${primerNombre} 👋 Notamos que aún no hemos recibido tu comprobante de transferencia.\n\n¿Necesitas los datos bancarios de nuevo? Con gusto te los envío 💳`,
-    ],
-  };
+  // Buscar template personalizado del tenant
+  if (tenantId) {
+    try {
+      const custom = db.prepare(`SELECT mensaje FROM tenant_followups WHERE tenant_id = ? AND tipo = ?`).get(tenantId, tipo);
+      if (custom?.mensaje) {
+        return custom.mensaje.replace(/\{\{nombre\}\}/g, primerNombre);
+      }
+    } catch (_) {}
+  }
 
-  const opciones = mensajes[tipo] || mensajes.follow_up_precio;
-  return opciones[Math.floor(Math.random() * opciones.length)];
+  // Usar mensaje predeterminado
+  const opciones = MENSAJES_DEFAULT[tipo] || MENSAJES_DEFAULT.follow_up_precio;
+  const plantilla = opciones[Math.floor(Math.random() * opciones.length)];
+  return plantilla.replace(/\{\{nombre\}\}/g, primerNombre);
 }
 
 // ─── Procesar y enviar seguimientos pendientes ────────────────────────────────
@@ -106,7 +119,7 @@ async function procesarSeguimientos(enviarMensajeFn) {
       ).get(seg.telefono, seg.tenant_id);
       const nombre = cliente?.nombre || '';
 
-      const mensaje = generarMensaje(seg.tipo, seg.telefono, nombre);
+      const mensaje = generarMensaje(seg.tipo, seg.telefono, nombre, seg.tenant_id);
 
       // Usar las credenciales del tenant correcto (del JOIN en obtenerPendientes)
       await enviarMensajeFn(seg.telefono, mensaje, seg.whatsapp_phone_id, seg.whatsapp_token);
@@ -141,4 +154,5 @@ module.exports = {
   generarMensaje,
   procesarSeguimientos,
   obtenerUltimoProducto,
+  MENSAJES_DEFAULT,
 };

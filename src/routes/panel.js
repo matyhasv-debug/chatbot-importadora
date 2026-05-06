@@ -6,6 +6,7 @@ const db         = require('../config/database');
 const jwt        = require('jsonwebtoken');
 const bcrypt     = require('bcryptjs');
 const { invalidarCacheByTenantId } = require('../services/tenantService');
+const { MENSAJES_DEFAULT }          = require('../services/followUpService');
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
   console.error('[Panel] ⚠️  JWT_SECRET no configurado. Define JWT_SECRET en .env para producción.');
   return 'fallback_secret_inseguro';
@@ -562,6 +563,46 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
     }
   }
   res.json({ ok, estados: ESTADOS });
+});
+
+// ─── API cliente: templates de follow-up ─────────────────────────────────────
+const TIPOS_FOLLOWUP = ['follow_up_precio', 'pago_recordatorio', 'post_venta', 'carrito_abandonado'];
+
+router.get('/:slug/api/followup-templates', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  const templates = {};
+  for (const tipo of TIPOS_FOLLOWUP) {
+    const row = db.prepare(`SELECT mensaje FROM tenant_followups WHERE tenant_id = ? AND tipo = ?`).get(tenant.id, tipo);
+    const defOpts = MENSAJES_DEFAULT[tipo] || [];
+    templates[tipo] = {
+      custom:       row?.mensaje || null,
+      predeterminado: defOpts[0]?.replace(/\{\{nombre\}\}/g, 'Cliente') || '',
+    };
+  }
+  res.json({ ok: true, templates });
+});
+
+router.put('/:slug/api/followup-templates/:tipo', express.json(), (req, res) => {
+  const { slug, tipo } = req.params;
+  if (!TIPOS_FOLLOWUP.includes(tipo)) return res.status(400).json({ ok: false, error: 'Tipo inválido' });
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  const { mensaje } = req.body;
+  if (!mensaje || !mensaje.trim()) {
+    db.prepare(`DELETE FROM tenant_followups WHERE tenant_id = ? AND tipo = ?`).run(tenant.id, tipo);
+    return res.json({ ok: true, revertido: true });
+  }
+  db.prepare(`
+    INSERT INTO tenant_followups (tenant_id, tipo, mensaje) VALUES (?, ?, ?)
+    ON CONFLICT(tenant_id, tipo) DO UPDATE SET mensaje = excluded.mensaje
+  `).run(tenant.id, tipo, mensaje.trim());
+  res.json({ ok: true });
 });
 
 // ─── API cliente: embalajes ───────────────────────────────────────────────────
