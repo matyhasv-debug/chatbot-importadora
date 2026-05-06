@@ -402,7 +402,12 @@ router.get('/:slug/api/stats', (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const hoy = new Date().toISOString().split('T')[0];
+
+  const hoy     = new Date().toISOString().split('T')[0];
+  const ts7d    = new Date(Date.now() - 7  * 86400000).toISOString();
+  const ts30d   = new Date(Date.now() - 30 * 86400000).toISOString();
+  const tid     = tenant.id;
+
   const porEstado = {};
   for (const estado of Object.keys(ESTADOS)) {
     try {
@@ -410,16 +415,39 @@ router.get('/:slug/api/stats', (req, res) => {
         `SELECT COUNT(*) as n FROM clientes cl
          INNER JOIN conversaciones c ON c.telefono = cl.telefono
          WHERE cl.estado = ? AND cl.tenant_id = ?`
-      ).get(estado, tenant.id)?.n || 0;
+      ).get(estado, tid)?.n || 0;
     } catch (_) { porEstado[estado] = 0; }
   }
+
+  // Actividad por día — últimos 7 días
+  const mensajesPorDia = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const fecha = d.toISOString().split('T')[0];
+    const dia   = d.toLocaleDateString('es-CL', { weekday: 'short' });
+    const count = db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(fecha, tid).n;
+    mensajesPorDia.push({ fecha, dia, count });
+  }
+
+  // Eficiencia del bot (mensajes respondidos sin intervención humana)
+  const totalBot    = db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE rol='assistant' AND mensaje NOT LIKE '[HUMANO]%' AND tenant_id=?`).get(tid).n;
+  const totalHumano = db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE rol='assistant' AND mensaje LIKE '[HUMANO]%' AND tenant_id=?`).get(tid).n;
+  const totalResp   = totalBot + totalHumano;
+  const pctBot      = totalResp > 0 ? Math.round(totalBot / totalResp * 100) : 0;
+
   const stats = {
-    mensajesHoy:    db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tenant.id).n,
-    contactosHoy:   db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tenant.id).n,
-    totalMensajes:  db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE tenant_id = ?`).get(tenant.id).n,
-    totalContactos: db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE tenant_id = ?`).get(tenant.id).n,
+    mensajesHoy:    db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tid).n,
+    contactosHoy:   db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tid).n,
+    mensajesSemana: db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE creado_en >= ? AND tenant_id = ?`).get(ts7d, tid).n,
+    contactosSemana:db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE creado_en >= ? AND tenant_id = ?`).get(ts7d, tid).n,
+    mensajesMes:    db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE creado_en >= ? AND tenant_id = ?`).get(ts30d, tid).n,
+    contactosMes:   db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE creado_en >= ? AND tenant_id = ?`).get(ts30d, tid).n,
+    totalMensajes:  db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE tenant_id = ?`).get(tid).n,
+    totalContactos: db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE tenant_id = ?`).get(tid).n,
     empresa:        tenant.empresa_nombre,
     porEstado,
+    mensajesPorDia,
+    eficienciaBot: { pctBot, totalBot, totalHumano },
   };
   res.json({ ok: true, stats });
 });

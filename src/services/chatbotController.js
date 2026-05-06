@@ -5,7 +5,7 @@ const geminiService   = require('./geminiService');
 const bsaleService    = require('./bsaleService');
 const followUpService = require('./followUpService');
 const tenantService   = require('./tenantService');
-const { enviarMensaje, enviarMenu } = require('./whatsappService');
+const { enviarMensaje, enviarMenu, enviarBotonesConfirmar } = require('./whatsappService');
 const catalogoService = require('./catalogoService');
 
 // ─── Notificación al dueño ────────────────────────────────────────────────────
@@ -248,6 +248,30 @@ async function procesarMensaje(data) {
       return;
     }
 
+    if (payload === 'confirmar_pedido') {
+      const historial2 = obtenerHistorial(telefono, tenantId);
+      const prodAnterior = await geminiService.extraerProductoConIA('quiero comprarlo', historial2);
+      let ctxConfirmar = '';
+      if (prodAnterior && prodAnterior.length > 2) {
+        const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
+        if (bsaleCtx) ctxConfirmar = bsaleCtx;
+      }
+      ctxConfirmar += '\n\nEl cliente confirmó que quiere comprar. Muestra el resumen del pedido con precio y pregunta "¿Confirmamos? 😊". NO des datos bancarios todavía.';
+      const respuesta = await geminiService.generarRespuesta('quiero comprarlo', historial2, ctxConfirmar, telefono, config);
+      setEtapa(telefono, tenantId, 'cotizando');
+      await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
+      return;
+    }
+
+    if (payload === 'mas_info') {
+      const historial2 = obtenerHistorial(telefono, tenantId);
+      const respuesta = await geminiService.generarRespuesta('tengo más dudas', historial2, '', telefono, config);
+      await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
+      return;
+    }
+
     const historial = obtenerHistorial(telefono, tenantId);
     const etapa     = getEtapa(telefono, tenantId);
     const intencion = await geminiService.detectarIntencion(texto, historial);
@@ -281,8 +305,14 @@ async function procesarMensaje(data) {
             if (ctx === null) {
               respuesta = `¡Hola! 👋 No encontramos "${productoEnSaludo}" en nuestro catálogo actualmente. ¿Buscas otro producto o necesitas algo más? 😊`;
             } else {
-              respuesta = await geminiService.generarRespuesta(texto, historial, ctx, telefono, config);
+              const respSaludo = await geminiService.generarRespuesta(texto, historial, ctx, telefono, config);
               followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
+              if (respSaludo) {
+                await enviarMensaje(telefono, respSaludo, whatsappPhoneId, whatsappToken);
+                guardarMensaje(telefono, nombre, 'assistant', respSaludo, tenantId);
+                await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
+              }
+              break;
             }
           } else {
             respuesta = await geminiService.generarRespuesta(texto, historial, '', telefono, config);
@@ -322,6 +352,13 @@ async function procesarMensaje(data) {
         }
         respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
+        // Enviar botones de acción después de mostrar el producto
+        if (respuesta) {
+          await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
+          await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
+          respuesta = ''; // ya enviado, evitar doble envío al final
+        }
         break;
       }
 

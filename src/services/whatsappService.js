@@ -39,6 +39,28 @@ async function marcarLeido(messageId, phoneId = null, token = null) {
   } catch (_) {}
 }
 
+async function enviarBotonesConfirmar(telefono, phoneId = null, token = null) {
+  const api = crearApiWA(phoneId, token);
+  try {
+    await api.post('/messages', {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: telefono,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: '¿Qué quieres hacer? 😊' },
+        action: {
+          buttons: [
+            { type: 'reply', reply: { id: 'confirmar_pedido', title: '✅ Lo quiero comprar' } },
+            { type: 'reply', reply: { id: 'mas_info',         title: '❓ Tengo más dudas'  } },
+          ],
+        },
+      },
+    });
+  } catch (_) {}
+}
+
 async function enviarMenu(telefono, phoneId = null, token = null) {
   const api = crearApiWA(phoneId, token);
   try {
@@ -112,7 +134,7 @@ function parsearWebhook(body) {
                          ? message.image.caption
                          : mediaInfo ? `[${message.type.toUpperCase()}]` : null,
       payload:       message.type === 'interactive'
-                       ? message.interactive?.button_reply?.id
+                       ? (message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || null)
                        : null,
       mediaInfo,
       timestamp:     message.timestamp,
@@ -123,4 +145,4 @@ function parsearWebhook(body) {
   }
 }
 
-module.exports = { enviarMensaje, marcarLeido, enviarMenu, parsearWebhook };
+module.exports = { enviarMensaje, marcarLeido, enviarMenu, enviarBotonesConfirmar, parsearWebhook };

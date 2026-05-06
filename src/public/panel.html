@@ -615,28 +615,70 @@ async function enviarMsg() {
 }
 async function cargarMetricas() {
   try {
-   const [sr, cr] = await Promise.all([
-  fetch(apiURL('/stats'), { headers: getHeaders() }).then(r => r.json()),
-  fetch(apiURL('/contactos'), { headers: getHeaders() }).then(r => r.json()),
-]);
+    const [sr, cr] = await Promise.all([
+      fetch(apiURL('/stats'), { headers: getHeaders() }).then(r => r.json()),
+      fetch(apiURL('/contactos'), { headers: getHeaders() }).then(r => r.json()),
+    ]);
     const s = sr.stats || {}, cs = cr.contactos || [];
     const total = cs.length;
-    const pag = s.porEstado?.pagado || 0;
-    const pend = s.porEstado?.pago_pendiente || 0;
-    const conv = pag + pend > 0 ? Math.round(pag / (pag + pend) * 100) : 0;
+    const pag   = s.porEstado?.pagado || 0;
+    const pend  = s.porEstado?.pago_pendiente || 0;
+    const conv  = pag + pend > 0 ? Math.round(pag / (pag + pend) * 100) : 0;
+    const dias  = s.mensajesPorDia || [];
+    const maxD  = Math.max(...dias.map(d => d.count), 1);
+    const ef    = s.eficienciaBot || { pctBot: 0, totalBot: 0, totalHumano: 0 };
 
     $('metrics-content').innerHTML = `
       <div>
-        <div class="section-title">Resumen general</div>
+        <div class="section-title">Resumen — últimas 24 h / 7 días / 30 días</div>
         <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-val" style="color:var(--accent)">${s.mensajesHoy || 0}</div><div class="kpi-lbl">Mensajes hoy</div></div>
-          <div class="kpi"><div class="kpi-val" style="color:var(--green)">${s.contactosHoy || 0}</div><div class="kpi-lbl">Clientes hoy</div></div>
-          <div class="kpi"><div class="kpi-val" style="color:var(--amber)">${pend}</div><div class="kpi-lbl">Pagos pendientes</div><div class="kpi-sub">Requieren seguimiento</div></div>
-          <div class="kpi"><div class="kpi-val" style="color:var(--green)">${pag}</div><div class="kpi-lbl">Ventas cerradas</div></div>
-          <div class="kpi"><div class="kpi-val" style="color:var(--purple)">${s.porEstado?.despachado || 0}</div><div class="kpi-lbl">Despachados</div></div>
-          <div class="kpi"><div class="kpi-val" style="color:var(--accent)">${conv}%</div><div class="kpi-lbl">Conversión</div></div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--accent)">${s.mensajesHoy || 0}</div>
+            <div class="kpi-lbl">Mensajes hoy</div>
+            <div class="kpi-sub">Semana: ${s.mensajesSemana || 0} · Mes: ${s.mensajesMes || 0}</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--green)">${s.contactosHoy || 0}</div>
+            <div class="kpi-lbl">Clientes hoy</div>
+            <div class="kpi-sub">Semana: ${s.contactosSemana || 0} · Mes: ${s.contactosMes || 0}</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--amber)">${pend}</div>
+            <div class="kpi-lbl">Pagos pendientes</div>
+            <div class="kpi-sub">Requieren seguimiento</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--green)">${pag}</div>
+            <div class="kpi-lbl">Ventas cerradas</div>
+            <div class="kpi-sub">${conv}% conversión</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--purple)">${ef.pctBot}%</div>
+            <div class="kpi-lbl">Autoatendido por bot</div>
+            <div class="kpi-sub">${ef.totalBot} bot · ${ef.totalHumano} humano</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-val" style="color:var(--slate)">${s.totalContactos || 0}</div>
+            <div class="kpi-lbl">Total clientes</div>
+            <div class="kpi-sub">${s.totalMensajes || 0} mensajes histórico</div>
+          </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="section-title">Actividad — últimos 7 días</div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:100px;margin-top:8px">
+          ${dias.map(d => {
+            const h = Math.max(Math.round(d.count / maxD * 100), d.count > 0 ? 4 : 0);
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+              <span style="font-size:10px;font-weight:700;color:var(--accent)">${d.count || ''}</span>
+              <div style="width:100%;height:${h}px;background:var(--accent);border-radius:4px 4px 0 0;opacity:${d.count > 0 ? 0.85 : 0.15};min-height:3px"></div>
+              <span style="font-size:10px;color:var(--muted);font-weight:600;text-transform:capitalize">${d.dia}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
       <div class="card">
         <div class="section-title">Embudo de ventas</div>
         ${[
@@ -654,6 +696,7 @@ async function cargarMetricas() {
           </div>`;
         }).join('')}
       </div>
+
       <div class="card">
         <div class="section-title">Estados de clientes</div>
         <div class="estados-grid">
