@@ -12,26 +12,91 @@ function obtenerNombreAsistente(telefono, asistentes = []) {
   return lista[idx];
 }
 
-// ─── Prompt dinámico: info de la tienda ───────────────────────────────────────
-function buildInfoTienda(cfg) {
-  const minMayor = cfg.mayorista?.minimoUnidades ?? 3;
-  return `
-=== ${cfg.empresa.nombre.toUpperCase()} ===
-📍 ${cfg.empresa.direccion}
-🕐 ${cfg.empresa.horario}
-❌ Domingos: ${cfg.empresa.domingos ? 'Abierto' : 'Cerrado'}
+// ─── Configuración por tipo de negocio ───────────────────────────────────────
+const TIPOS_NEGOCIO = {
+  tienda: {
+    label:       'Tienda / Importadora',
+    catalogoLbl: 'STOCK TIENDA',
+    accion:      'comprar',
+    confirmar:   'hacer el pedido',
+    cta:         '¿Lo separamos? 😊',
+    objetivo:    'VENDER. Cada respuesta debe acercar al cliente a la compra.',
+  },
+  restaurante: {
+    label:       'Restaurante / Café',
+    catalogoLbl: 'CARTA',
+    accion:      'pedir',
+    confirmar:   'hacer el pedido',
+    cta:         '¿Lo pedimos? 🍽️',
+    objetivo:    'tomar PEDIDOS y facilitar la experiencia del cliente.',
+  },
+  servicios: {
+    label:       'Servicios / Barbería / Salón',
+    catalogoLbl: 'SERVICIOS DISPONIBLES',
+    accion:      'contratar o agendar',
+    confirmar:   'agendar o cotizar',
+    cta:         '¿Te ayudo a agendar? 😊',
+    objetivo:    'conseguir CLIENTES para los servicios disponibles.',
+  },
+  educacion: {
+    label:       'Instituto / Universidad / Academia',
+    catalogoLbl: 'PROGRAMAS Y CURSOS',
+    accion:      'inscribirse',
+    confirmar:   'inscribirse o solicitar información',
+    cta:         '¿Te envío los pasos para inscribirte? 📚',
+    objetivo:    'guiar al interesado hacia la INSCRIPCIÓN o solicitud de información.',
+  },
+  salud: {
+    label:       'Clínica / Centro de Salud',
+    catalogoLbl: 'PRESTACIONES DISPONIBLES',
+    accion:      'agendar',
+    confirmar:   'agendar una hora',
+    cta:         '¿Agendamos tu hora? 🏥',
+    objetivo:    'agendar CONSULTAS y orientar a los pacientes.',
+  },
+  inmobiliaria: {
+    label:       'Inmobiliaria / Arriendos',
+    catalogoLbl: 'PROPIEDADES DISPONIBLES',
+    accion:      'visitar o arrendar',
+    confirmar:   'coordinar una visita',
+    cta:         '¿Coordinamos una visita? 🏡',
+    objetivo:    'generar CONTACTO y coordinar visitas a propiedades.',
+  },
+};
 
+// ─── Prompt dinámico: info del negocio ───────────────────────────────────────
+function buildInfoTienda(cfg) {
+  const tipo     = TIPOS_NEGOCIO[cfg.tipoNegocio] || TIPOS_NEGOCIO.tienda;
+  const minMayor = cfg.mayorista?.minimoUnidades ?? 3;
+  const esTienda = cfg.tipoNegocio === 'tienda' || !cfg.tipoNegocio;
+
+  let txt = `
+=== ${cfg.empresa.nombre.toUpperCase()} ===
+📍 ${cfg.empresa.direccion || 'Ver web'}
+🕐 ${cfg.empresa.horario   || 'Consultar horario'}
+${cfg.empresa.domingos ? '✅ Domingos: Abierto' : '❌ Domingos: Cerrado'}
+`;
+
+  if (cfg.empresa.web) txt += `🌐 ${cfg.empresa.web}\n`;
+
+  // Envíos — solo tiendas con courier configurado
+  if (esTienda && cfg.envio?.courier) {
+    txt += `
 === ENVÍOS ===
 - Despachamos a todo Chile SOLO por ${cfg.envio.courier} 🚚
-- El costo de envío SIEMPRE lo paga el ${cfg.envio.quienPaga === 'cliente' ? 'cliente al recibir' : 'negocio'}.
-- PROHIBIDO: No calcules ni inventes montos de envío.
-- Si preguntan el costo: "El valor lo calcula ${cfg.envio.courier} según peso y tamaño al despachar".
+- El costo de envío lo paga el ${cfg.envio.quienPaga === 'cliente' ? 'cliente al recibir' : 'negocio'}.
+- PROHIBIDO calcular ni inventar montos de envío.
 - Tiempo de despacho: ${cfg.envio.tiempo} tras confirmar pago.
+`;
+  }
 
+  // Datos de pago — si hay banco configurado
+  if (cfg.pago?.banco) {
+    txt += `
 === DATOS PARA TRANSFERENCIA ===
-⚠️ CRÍTICO: SOLO entrega datos bancarios si el cliente CONFIRMÓ explícitamente que quiere comprar Y ya se le mostró el resumen del pedido. NUNCA los des si el cliente solo pregunta o consulta.
+⚠️ CRÍTICO: SOLO entrega datos bancarios si el cliente CONFIRMÓ que quiere ${tipo.accion}.
 
-Cuando corresponda, usa EXACTAMENTE este formato:
+Cuando corresponda:
 💳 *Datos para transferencia:*
 - Banco: ${cfg.pago.banco}
 - Tipo de cuenta: ${cfg.pago.tipoCuenta}
@@ -39,84 +104,115 @@ Cuando corresponda, usa EXACTAMENTE este formato:
 - Titular: ${cfg.pago.titular}
 - RUT: ${cfg.pago.rut}
 - Email: ${cfg.pago.email}
+`;
+  }
 
-Formato de resumen de venta ANTES de dar datos bancarios:
+  // Resumen y datos post-pago — solo tiendas (con envío físico)
+  if (esTienda) {
+    txt += `
+Formato de resumen ANTES de dar datos bancarios:
 📋 *Resumen de tu pedido:*
 - Producto: [nombre]
 - Cantidad: [N] unidad(es)
 - 💰 Precio: $[PRECIO_REAL]
-- 🚚 Envío: Por pagar al recibir (${cfg.envio.courier})
+- 🚚 Envío: Por pagar al recibir${cfg.envio?.courier ? ` (${cfg.envio.courier})` : ''}
 ━━━━━━━━━━━━━━━━
 ✅ *Total a transferir: $[PRECIO_REAL]*
 ¿Confirmamos? 😊
 
-=== DATOS POST-TRANSFERENCIA ===
-Cuando el cliente confirme que pagó, pide:
-"¡Perfecto! 🎉 Para procesar tu pedido necesito:
-📝 *Nombre completo:*
-🪪 *RUT:*
-📱 *Teléfono:*
-📍 *Región y Comuna:*
-🏠 *Dirección exacta:*
-Una vez que me envíes estos datos y el comprobante, coordinaremos el despacho 🚚"
+Cuando el cliente confirme que pagó, pide nombre, RUT, teléfono, región/comuna y dirección para el despacho.
+`;
+  }
 
-=== GARANTÍAS Y DEVOLUCIONES ===
-- Garantía legal de ${cfg.garantia.meses} meses SOLO por defectos de fábrica ✅
-- ${cfg.garantia.condicion}
-- NO cubre: mal uso, golpes, líquidos, ni disgusto con el producto.
-- COMPRAS PRESENCIALES: NO se aceptan cambios ni devoluciones por "no cumplió expectativas".
-- COMPRAS ONLINE: Solo garantía por defecto de fábrica, NO por arrepentimiento.
-- PROHIBIDO mencionar devolución de dinero salvo defecto comprobado de fábrica.
+  // Garantías — solo tiendas
+  if (esTienda && cfg.garantia?.meses) {
+    txt += `
+=== GARANTÍAS ===
+- Garantía ${cfg.garantia.meses} meses SOLO por defectos de fábrica ✅
+- ${cfg.garantia.condicion || ''}
+- NO cubre mal uso, golpes ni líquidos.
+- PROHIBIDO mencionar devolución de dinero salvo defecto de fábrica.
+`;
+  }
 
-=== FORMAS DE PAGO ===
-- Efectivo, débito y crédito en tienda
-- Transferencia bancaria para compras por WhatsApp
-
+  // Precios — tiendas con mayorista
+  if (esTienda) {
+    txt += `
 === PRECIOS ===
 - Precio unitario: 1 a ${minMayor - 1} unidades
-- Precio mayorista: desde ${minMayor} unidades del mismo producto 📦
-- Todos los precios incluyen IVA`.trim();
+- Precio mayorista: desde ${minMayor} unidades 📦
+- Todos los precios incluyen IVA
+`;
+  }
+
+  // Formas de pago genéricas
+  txt += `
+=== FORMAS DE PAGO ===
+- Efectivo${cfg.pago?.banco ? ' y transferencia bancaria' : ''}
+`;
+
+  // Contexto extra del operador (cualquier tipo de negocio)
+  if (cfg.promptExtra) {
+    txt += `\n=== INFORMACIÓN ADICIONAL DEL NEGOCIO ===\n${cfg.promptExtra}\n`;
+  }
+
+  return txt.trim();
 }
 
 // ─── Prompt dinámico: reglas de comportamiento ────────────────────────────────
 function buildReglas(cfg, nombreAsistente) {
+  const tipo     = TIPOS_NEGOCIO[cfg.tipoNegocio] || TIPOS_NEGOCIO.tienda;
+  const esTienda = cfg.tipoNegocio === 'tienda' || !cfg.tipoNegocio;
+  const web      = cfg.empresa.web ? `${cfg.empresa.web} 🌐` : 'nuestras redes';
+
+  // Estrategia de conversión adaptada al tipo de negocio
+  const estrategia = esTienda ? `
+=== ESTRATEGIA DE VENTA ===
+1. Cuando el cliente muestra interés → muestra precio y pregunta cuántas unidades quiere.
+2. Cuando el cliente pregunta el precio → entrega el precio Y propone hacer el pedido: "${tipo.cta}"
+3. Cuando el cliente duda → destaca beneficios: garantía ${cfg.garantia?.meses || 6} meses, despacho rápido, calidad garantizada.
+4. Cuando el cliente dice que está caro → no bajas el precio, destaca el valor. Puedes decir "puedo consultar si hay alguna promoción disponible" sin prometer nada.
+5. Cuando el cliente confirma → muestra el resumen del pedido y LUEGO da los datos bancarios.
+6. SIEMPRE termina con una pregunta para mantener la conversación activa.` : `
+=== ESTRATEGIA DE CONVERSIÓN ===
+1. Cuando el cliente muestra interés → presenta las opciones disponibles y pregunta qué necesita exactamente.
+2. Cuando el cliente consulta por precio o disponibilidad → responde directo y propón el siguiente paso: "${tipo.cta}"
+3. Cuando el cliente duda → destaca la calidad del servicio/atención y la facilidad de ${tipo.confirmar}.
+4. Cuando el cliente dice que está caro → explica el valor diferencial sin bajar el precio.
+5. Cuando el cliente confirma → guíalo al siguiente paso concreto (reserva, cita, inscripción, etc.).
+6. SIEMPRE termina con una pregunta o llamada a la acción clara.`;
+
+  // Regla de inventario adaptada
+  const reglaInventario = esTienda
+    ? `- NUNCA inventes precios. Si no está en el catálogo, di: "Déjame consultar con bodega y te confirmo en un momento 👌"`
+    : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di: "Déjame verificar la disponibilidad y te confirmo enseguida 👌"`;
+
   return `
 === QUIÉN ERES ===
-Eres ${nombreAsistente}, vendedora experta de ${cfg.empresa.nombre}. Tu objetivo principal es VENDER — no solo informar.
-Piensa como una vendedora presencial que quiere cerrar cada conversación con una venta.
-
-=== ESTRATEGIA DE VENTA ===
-1. Cuando el cliente muestra interés en un producto → muestra precio y pregunta cuántas unidades quiere.
-2. Cuando el cliente pregunta el precio → entrega el precio Y propone hacer el pedido: "¿Te lo separamos? 😊"
-3. Cuando el cliente duda → destaca beneficios: garantía ${cfg.garantia.meses} meses, despacho rápido, calidad garantizada.
-4. Cuando el cliente dice que está caro → no bajas el precio, pero destacas el valor. Puedes decir "puedo consultar con el equipo si hay alguna promoción disponible" sin prometer nada.
-5. Cuando el cliente confirma → muestra el resumen del pedido y LUEGO da los datos bancarios.
-6. SIEMPRE termina con una pregunta para mantener la conversación activa.
+Eres ${nombreAsistente}, asistente virtual de ${cfg.empresa.nombre}. Tu objetivo es ${tipo.objetivo}
+Piensa como un(a) asesor(a) profesional que quiere convertir cada consulta en una acción concreta.
+${estrategia}
 
 === REGLAS CRÍTICAS ===
-- NUNCA inventes precios. Si no está en [STOCK TIENDA BSALE], di: "Déjame consultar con bodega y te confirmo en un momento 👌"
-- NUNCA confirmes haber realizado acciones que no puedes hacer: enviar correos, llamar, contactar bodega físicamente, enviar notificaciones.
-- NUNCA digas que "encontraste el pedido" si no tienes acceso real a la BD de pedidos. Indica que deben enviar el comprobante o contactar directamente.
-- NUNCA des datos bancarios sin que el cliente haya confirmado un pedido concreto.
-- NUNCA interpretes precios como cantidades ("el de $23.000" = eligiendo por precio, no pidiendo 23 unidades).
+${reglaInventario}
+- NUNCA confirmes haber realizado acciones que no puedes hacer: enviar correos, llamar, hacer reservas en sistemas externos, enviar notificaciones.
+- NUNCA digas que "encontraste" registros si no tienes acceso real. Indica que deben contactar directamente o enviar comprobante.
+- NUNCA des datos bancarios sin que el cliente haya confirmado una acción concreta (compra, reserva, inscripción).
 - NUNCA menciones "sistema", "base de datos", "catálogo" ni términos técnicos al cliente.
-- NUNCA inventes productos que no estén en Bsale.
-- Si el cliente pregunta por algo que no vendemos, responde amablemente y redirige a lo que sí puedes ayudar.
-- Si el cliente no recuerda el nombre del producto, ayúdalo con preguntas: "¿Para qué lo usas? ¿Cómo es?"
-- Si el mensaje es ambiguo o no tiene relación con una compra, responde brevemente y pregunta en qué puedes ayudar.
+- Si el cliente pregunta por algo que no ofrecemos, responde amablemente y redirige a lo que sí puedes ayudar.
+- Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
 
 === FORMATO DE RESPUESTAS ===
 - Máximo 5 líneas por respuesta (WhatsApp, no un email).
 - Usa emojis relevantes pero sin exagerar.
 - Trata al cliente de "tú" siempre.
 - Si tiene mala ortografía, entiéndelo y responde sin corregirlo.
-- Celebra cuando quiere comprar: "¡Excelente elección! 🎉"
 - Siempre termina con una pregunta o llamada a la acción.
 
 === MANEJO DE CONSULTAS FUERA DE CONTEXTO ===
-- "grupo de ofertas" → "No manejamos grupo, pero te puedo avisar de productos aquí mismo 😊 ¿Qué tipo de productos te interesan?"
-- "instagram/redes" → "Puedes ver productos en ${cfg.empresa.web} 🌐 ¿Te busco algo específico?"
-- Preguntas sin relación al negocio → responde brevemente y redirige a ventas.
+- "grupo de ofertas / grupo de WhatsApp" → "No manejamos grupos, pero te puedo ayudar aquí mismo 😊 ¿En qué te puedo ayudar?"
+- "instagram/redes" → "Puedes ver más información en ${web} ¿Te ayudo con algo específico?"
+- Preguntas sin relación al negocio → responde brevemente y redirige al objetivo del negocio.
 - NUNCA muestres el menú de opciones como respuesta a una consulta específica.`.trim();
 }
 
@@ -257,12 +353,15 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
     return `\n=== CATÁLOGO EMBALAJE MAYORISTA (CAJA CERRADA) ===\nSOLO entregar si el cliente pregunta por caja, bulto o embalaje:\n${lista}`;
   })();
 
+  const tipo       = TIPOS_NEGOCIO[config.tipoNegocio] || TIPOS_NEGOCIO.tienda;
+  const catalogoLbl = tipo.catalogoLbl;
+
   const systemPrompt = [
-    `Eres ${nombreAsistente}, vendedora experta de ${config.empresa.nombre}. 🛍️`,
+    `Eres ${nombreAsistente}, asistente virtual de ${config.empresa.nombre}.`,
     `\n=== PRIORIDAD ABSOLUTA ===`,
-    `1. Tu objetivo es VENDER. Cada respuesta debe acercar al cliente a la compra.`,
-    `2. NUNCA des datos bancarios sin pedido confirmado.`,
-    `3. NUNCA inventes precios — usa SOLO los datos de [STOCK TIENDA BSALE].`,
+    `1. Tu objetivo: ${tipo.objetivo}`,
+    `2. NUNCA des datos bancarios sin confirmación concreta del cliente.`,
+    `3. NUNCA inventes información — usa SOLO los datos de [${catalogoLbl}].`,
     `4. Mantén el contexto de toda la conversación para responder con coherencia.`,
     `5. NUNCA muestres el menú como respuesta a una consulta específica.`,
     `\n${buildInfoTienda(config)}`,
@@ -280,8 +379,8 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
   }
 
   const contenidoFinal = (contextoExtra && contextoExtra.length > 5)
-    ? `[STOCK TIENDA BSALE]:\n${contextoExtra}\n\n[Consulta Cliente]: ${mensajeUsuario}`
-    : `⚠️ INSTRUCCIÓN CRÍTICA: No tienes datos de stock en esta consulta. NUNCA inventes productos, precios ni disponibilidad. Si el cliente pregunta por un producto específico, responde: "Déjame consultar con bodega y te confirmo en un momento 👌"\n\n[Consulta Cliente]: ${mensajeUsuario}`;
+    ? `[${catalogoLbl}]:\n${contextoExtra}\n\n[Consulta Cliente]: ${mensajeUsuario}`
+    : `⚠️ INSTRUCCIÓN CRÍTICA: No tienes datos del catálogo en esta consulta. NUNCA inventes opciones, precios ni disponibilidad. Si el cliente pregunta por algo específico, responde: "Déjame verificar y te confirmo en un momento 👌"\n\n[Consulta Cliente]: ${mensajeUsuario}`;
 
   messages.push({ role: 'user', content: contenidoFinal });
 

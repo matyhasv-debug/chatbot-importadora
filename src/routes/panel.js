@@ -354,20 +354,23 @@ router.post('/api/tenants', express.json(), (req, res) => {
     const { slug, empresa_nombre, empresa_dir, empresa_web, empresa_horario, empresa_domingos,
       asistentes, pago_banco, pago_tipo, pago_cuenta, pago_titular, pago_rut, pago_email,
       envio_courier, envio_tiempo, envio_quien_paga, mayorista_minimo, garantia_meses, garantia_cond,
-      bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key } = req.body;
+      bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key,
+      tipo_negocio, prompt_extra } = req.body;
     if (!slug || !empresa_nombre || !whatsapp_phone_id || !whatsapp_token)
       return res.status(400).json({ ok: false, error: 'Faltan campos obligatorios' });
     const r = db.prepare(`
       INSERT INTO tenants (slug, empresa_nombre, empresa_dir, empresa_web, empresa_horario, empresa_domingos,
         asistentes, pago_banco, pago_tipo, pago_cuenta, pago_titular, pago_rut, pago_email,
         envio_courier, envio_tiempo, envio_quien_paga, mayorista_minimo, garantia_meses, garantia_cond,
-        bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key,
+        tipo_negocio, prompt_extra)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(slug, empresa_nombre, empresa_dir||'', empresa_web||'', empresa_horario||'', empresa_domingos?1:0,
       JSON.stringify(asistentes||[]), pago_banco||'', pago_tipo||'', pago_cuenta||'', pago_titular||'',
       pago_rut||'', pago_email||'', envio_courier||'', envio_tiempo||'', envio_quien_paga||'cliente',
       mayorista_minimo||3, garantia_meses||6, garantia_cond||'', bsale_token||'',
-      whatsapp_phone_id, whatsapp_token, notif_telefono||'', modo_catalogo||'bsale', panel_key||'');
+      whatsapp_phone_id, whatsapp_token, notif_telefono||'', modo_catalogo||'bsale', panel_key||'',
+      tipo_negocio||'tienda', prompt_extra||'');
     res.json({ ok: true, tenantId: r.lastInsertRowid });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });

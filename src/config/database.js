@@ -131,6 +131,8 @@ const migraciones = [
   `ALTER TABLE tenants ADD COLUMN panel_key TEXT`,
   `ALTER TABLE seguimientos ADD COLUMN tenant_id INTEGER REFERENCES tenants(id)`,
   `ALTER TABLE clientes ADD COLUMN modo_humano INTEGER DEFAULT 0`,
+  `ALTER TABLE tenants ADD COLUMN tipo_negocio TEXT DEFAULT 'tienda'`,
+  `ALTER TABLE tenants ADD COLUMN prompt_extra TEXT DEFAULT ''`,
 ];
 
 for (const sql of migraciones) {

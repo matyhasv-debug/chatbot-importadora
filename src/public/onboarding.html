@@ -254,6 +254,18 @@ tr:hover td{background:var(--surf2)}
         <input id="whatsapp_token" placeholder="EAABx...">
       </div>
       <div class="field">
+        <label>Tipo de negocio</label>
+        <select id="tipo_negocio">
+          <option value="tienda">🛍️ Tienda / Importadora</option>
+          <option value="restaurante">🍽️ Restaurante / Café</option>
+          <option value="servicios">✂️ Servicios / Barbería / Salón</option>
+          <option value="educacion">📚 Instituto / Universidad / Academia</option>
+          <option value="salud">🏥 Clínica / Centro de Salud</option>
+          <option value="inmobiliaria">🏡 Inmobiliaria / Arriendos</option>
+        </select>
+        <span class="hint">Define el comportamiento y tono del asistente</span>
+      </div>
+      <div class="field">
         <label>Modo catálogo</label>
         <select id="modo_catalogo">
           <option value="bsale">Bsale (con ERP)</option>
@@ -268,6 +280,16 @@ tr:hover td{background:var(--surf2)}
         <label>Teléfono del dueño (notificaciones)</label>
         <input id="notif_telefono" placeholder="ej: 56912345678">
       </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Instrucciones extra -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">📝 Instrucciones adicionales para el asistente</div>
+    <div class="field" style="margin-bottom:24px">
+      <label>Contexto extra (prompt_extra)</label>
+      <textarea id="prompt_extra" rows="4" placeholder="Ej: Solo atendemos pedidos desde 5 unidades. No hacemos despachos los lunes. Los precios incluyen embalaje especial..." style="width:100%;resize:vertical"></textarea>
+      <span class="hint">Opcional. Estas instrucciones se agregan al prompt del asistente y son específicas de este negocio.</span>
     </div>
 
     <div class="section-divider"></div>
@@ -412,6 +434,8 @@ async function crearTenant() {
     bsale_token:       document.getElementById('bsale_token').value.trim(),
     notif_telefono:    document.getElementById('notif_telefono').value.trim(),
     modo_catalogo:     document.getElementById('modo_catalogo').value,
+    tipo_negocio:      document.getElementById('tipo_negocio').value,
+    prompt_extra:      document.getElementById('prompt_extra').value.trim(),
     panel_key:         '',
   };
 

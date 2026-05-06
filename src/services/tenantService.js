@@ -69,6 +69,8 @@ function buildConfig(tenant) {
       notifTelefono:   tenant.notif_telefono,
     },
     embalajes,
+    tipoNegocio: tenant.tipo_negocio || 'tienda',
+    promptExtra:  tenant.prompt_extra  || '',
   };
 }
 
