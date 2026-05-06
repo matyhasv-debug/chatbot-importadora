@@ -20,9 +20,15 @@ function verificarAuthCliente(req, res, tenant) {
     try { jwt.verify(token, JWT_SECRET); return true; }
     catch (_) { res.status(401).json({ ok: false, error: 'Token inválido' }); return false; }
   }
+  // Si el tenant tiene credenciales configuradas, siempre requiere JWT
+  if (tenant.panel_usuario) {
+    res.status(401).json({ ok: false, error: 'No autorizado' });
+    return false;
+  }
+  // Autenticación legacy por panel_key (solo si no hay panel_usuario)
   const key = req.query.key || '';
-  if (tenant.panel_key && tenant.panel_key !== key) {
-    res.status(401).json({ ok: false });
+  if (!tenant.panel_key || tenant.panel_key !== key) {
+    res.status(401).json({ ok: false, error: 'No autorizado' });
     return false;
   }
   return true;
@@ -712,11 +718,8 @@ router.get('/:slug', (req, res) => {
     return res.sendFile(path.join(__dirname, '../public/panel.html'));
   }
 
-  if (tenant.panel_usuario) {
-    return res.redirect(`/panel/${slug}/login`);
-  }
-
-  res.sendFile(path.join(__dirname, '../public/panel.html'));
+  // Sin JWT ni key válida → siempre redirigir al login
+  return res.redirect(`/panel/${slug}/login`);
 });
 
 module.exports = { router, emitirEvento, esModoHumano, setModoHumano, actualizarEstadoCliente, getEstadoCliente, ESTADOS };
