@@ -277,18 +277,22 @@ Mensaje actual del cliente: "${mensaje}"
 Clasifica el mensaje actual considerando el contexto. Categorías:
 - BUSCAR_PRODUCTO: pregunta por un producto específico o su precio
 - PRECIO_MAYORISTA: pregunta por cantidad mayor o precio por volumen
-- HACER_PEDIDO: quiere comprar algo concreto
+- HACER_PEDIDO: quiere comprar algo concreto que AÚN NO tiene
 - CONFIRMAR_PEDIDO: confirma un pedido que ya tenía resumen con precio y total
-- CONFIRMAR: dice sí/ok/dale a algo que NO es confirmación de pedido
+- CONFIRMAR: dice sí/ok/dale/por favor/por fa a algo que NO es confirmación de pedido
 - TRANSFERENCIA: pregunta por datos bancarios o cómo pagar
 - ENVIO: pregunta por envío, despacho, tiempo de entrega
 - PAGO: pregunta sobre formas de pago
 - GARANTIA: pregunta sobre garantía, cambios, devoluciones
 - HORARIO: pregunta por horarios, ubicación o dirección
+- SOPORTE_TECNICO: ya tiene el producto y pregunta cómo usarlo, configurarlo, o pide tutorial/pasos
 - SALUDO: saludo sin consulta específica
 - AYUDA: pide ayuda general o menú de opciones
 - CONSULTA_GENERAL: cualquier otra consulta
 - DESARROLLADOR: pregunta quién hizo el bot
+
+IMPORTANTE: Si el cliente dice "ya lo compré / ya la tengo / ya está en mi poder" → NO es HACER_PEDIDO.
+Si el contexto muestra que el cliente ya tiene el producto → clasificar como SOPORTE_TECNICO o CONSULTA_GENERAL, nunca HACER_PEDIDO.
 
 Responde SOLO con la categoría exacta, sin explicación.`;
 
@@ -311,9 +315,13 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/transfer|número.*cuenta|datos.*banco|rut.*pago|cómo.*pago|como.*pago/i.test(mensaje)) return 'TRANSFERENCIA';
   if (/env[íi]o|despacho|despachan|courier|starken|chilexpress|blue.?express|correos chile|llega.*cu[aá]ndo|cu[aá]ndo.*llega/i.test(mensaje)) return 'ENVIO';
   if (/horario|abren|cierran|atienden|qué días|ubicaci[oó]n|direcci[oó]n|d[oó]nde (quedan?|est[aá]n?|queda)|de d[oó]nde son/i.test(mensaje)) return 'HORARIO';
-  if (/garantía|cambio|devolución|falla|defecto|no funciona/i.test(mensaje))                 return 'GARANTIA';
+  if (/garantía|cambio|devolución|falla|defecto/i.test(mensaje))                             return 'GARANTIA';
   if (/foto|imagen|ver.*producto/i.test(mensaje))                                             return 'CONSULTA_GENERAL';
   if (/desarrollador|creó|quien.*hizo/i.test(mensaje))                                       return 'DESARROLLADOR';
+  // Soporte técnico: cliente ya tiene el producto y necesita ayuda para usarlo
+  if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
+  // Afirmaciones cortas solas: nunca disparar compra, dejar que el contexto las maneje
+  if (/^(si+|sii+|s[ií]|ok|dale|listo|claro|bueno|perfecto|de acuerdo|ta bien|ta bueno|ya po|ya|por fa|por favor|porfa)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'CONFIRMAR';
 
   return await detectarIntencionIA(mensaje, historialDB);
 }

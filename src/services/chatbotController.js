@@ -235,6 +235,14 @@ async function procesarMensaje(data) {
       return;
     }
 
+    // URLs externas (Instagram, YouTube, etc.) → preguntar qué producto es
+    if (/https?:\/\/[^\s]+/i.test(texto) && !extraerProductoDeURL(texto, config.empresa.web)) {
+      const respURL = `Veo que enviaste un link 😊 ¿Qué producto te interesa? Escríbeme el nombre y lo busco en nuestro catálogo 🔍`;
+      await enviarMensaje(telefono, respURL, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respURL, tenantId);
+      return;
+    }
+
     // Si el cliente mandó una URL de la web propia, extraer el producto del slug y buscar en Bsale
     const productoDeURL = extraerProductoDeURL(texto, config.empresa.web);
     if (productoDeURL) {
@@ -561,6 +569,20 @@ ${empresa.domingos ? '✅ Abierto los domingos' : '❌ Cerrado los domingos'}
 🛒 Retiro en tienda: Sí, los clientes pueden pasar a retirar sus pedidos en persona en el horario indicado.
 Si el cliente pregunta si puede comprar online y retirar hoy: responde que puede pasar a retirar en nuestra dirección durante el horario de atención.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, ctxHorario, telefono, config);
+        break;
+      }
+
+      case 'SOPORTE_TECNICO': {
+        setEtapa(telefono, tenantId, 'explorando');
+        const prodSoporte = await geminiService.extraerProductoConIA(texto, historial);
+        const ctxSoporte = `El cliente ya tiene el producto${prodSoporte ? ` "${prodSoporte}"` : ''} y necesita ayuda para usarlo o configurarlo.
+INSTRUCCIONES:
+- Da 3-4 pasos básicos para empezar a usar el producto.
+- Sugiere buscar el manual o un tutorial en YouTube si necesita más detalle.
+- NO ofrezcas venderle el producto ni muestres precios.
+- NO des datos bancarios.
+- Tono amigable y práctico.`;
+        respuesta = await geminiService.generarRespuesta(texto, historial, ctxSoporte, telefono, config);
         break;
       }
 
