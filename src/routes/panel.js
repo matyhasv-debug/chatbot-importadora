@@ -271,8 +271,9 @@ router.post('/api/estado-cliente', verificarAdmin, express.json(), async (req, r
   const ok = actualizarEstadoCliente(telefono, estado);
   if (ok && (estado === 'pagado' || estado === 'despachado')) {
     const conv    = db.prepare(`SELECT tenant_id FROM conversaciones WHERE telefono = ? ORDER BY creado_en DESC LIMIT 1`).get(telefono);
-    const tenant  = conv?.tenant_id ? db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(conv.tenant_id) : null;
+    const tenant  = conv?.tenant_id ? db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(conv.tenant_id) : db.prepare(`SELECT * FROM tenants WHERE activo = 1 LIMIT 1`).get();
     const DUENO_TEL = tenant?.notif_telefono || process.env.DUENO_WHATSAPP;
+    console.log(`[Panel] Estado → ${estado} | tenant_id: ${conv?.tenant_id} | notif_tel: ${DUENO_TEL || 'NO CONFIGURADO'}`);
     if (DUENO_TEL) {
       const phoneId = tenant?.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
       const tok     = tenant?.whatsapp_token    || process.env.WHATSAPP_TOKEN;
@@ -285,7 +286,8 @@ router.post('/api/estado-cliente', verificarAdmin, express.json(), async (req, r
             type: 'text', text: { preview_url: false, body: `${ESTADOS[estado].emoji} *Estado actualizado*\nCliente: ${nombre} (${telefono})\nNuevo estado: *${ESTADOS[estado].label}*` } },
           { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
         );
-      } catch (err) { console.error('[Panel] Error notificando dueño:', err.message); }
+        console.log(`[Panel] ✅ Notificación enviada a ${DUENO_TEL}`);
+      } catch (err) { console.error('[Panel] ❌ Error notificando dueño:', err.message); }
     }
   }
   res.json({ ok, estados: ESTADOS });
