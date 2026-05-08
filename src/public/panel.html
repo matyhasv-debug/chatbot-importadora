@@ -469,8 +469,9 @@ async function cargarMensajes(telefono, { forceScroll = false } = {}) {
     const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
     const msgs = data.mensajes || [];
     const c = $('messages');
-    // Solo hacer auto-scroll si el usuario ya estaba cerca del final
-    const estabaAbajo = forceScroll || (c.scrollHeight - c.clientHeight - c.scrollTop < 100);
+    // Guardar distancia desde el fondo ANTES de reemplazar el DOM
+    const distanciaFondo = c.scrollHeight - c.scrollTop - c.clientHeight;
+    const estabaAbajo = forceScroll || distanciaFondo < 100;
     if (!msgs.length) {
       c.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Sin mensajes aún</p></div>';
       return;
@@ -508,7 +509,15 @@ async function cargarMensajes(telefono, { forceScroll = false } = {}) {
       </div>`;
     }
     c.innerHTML = html;
-    if (estabaAbajo) setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
+    // Restaurar posición de scroll después de reemplazar el DOM
+    setTimeout(() => {
+      if (estabaAbajo) {
+        c.scrollTop = c.scrollHeight;
+      } else {
+        // Mantener la misma distancia desde el fondo para que el usuario siga leyendo donde estaba
+        c.scrollTop = c.scrollHeight - c.clientHeight - distanciaFondo;
+      }
+    }, 30);
   } catch (_) {}
 }
 
