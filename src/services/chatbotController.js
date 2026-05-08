@@ -11,18 +11,29 @@ const catalogoService = require('./catalogoService');
 // ─── Notificación al dueño ────────────────────────────────────────────────────
 async function notificarDueno(tipo, telefono, nombre, extra = '', config = null) {
   const DUENO_TEL = config?.credenciales?.notifTelefono || process.env.DUENO_WHATSAPP;
-  if (!DUENO_TEL) return;
+  if (!DUENO_TEL) {
+    console.warn(`[Notif] ⚠️ Sin número de notificación configurado (tipo: ${tipo})`);
+    return;
+  }
 
   const mensajes = {
-    pago_detectado: `💰 *PAGO DETECTADO*\nCliente: ${nombre} (${telefono})\nMensaje: ${extra}`,
-    comprobante:    `🧾 *COMPROBANTE RECIBIDO*\nCliente: ${nombre} (${telefono})\nRevisa el panel.`,
-    error_bot:      `⚠️ *ERROR EN BOT*\nCliente: ${nombre} (${telefono})\nError: ${extra}`,
+    pago_detectado:     `💰 *PAGO DETECTADO*\nCliente: ${nombre} (${telefono})\nMensaje: ${extra}`,
+    comprobante:        `🧾 *COMPROBANTE RECIBIDO*\nCliente: ${nombre} (${telefono})\nRevisa el panel.`,
+    error_bot:          `⚠️ *PRODUCTO NO ENCONTRADO*\nCliente: ${nombre} (${telefono})\n${extra}`,
+    solicitud_humano:   `🙋 *CLIENTE PIDE HABLAR CON PERSONA*\nCliente: ${nombre} (${telefono})\n${extra}`,
+    lead_mayorista:     `🛒 *POSIBLE REVENDEDOR/MAYORISTA*\nCliente: ${nombre} (${telefono})\n${extra}`,
+    propuesta_comercial:`📢 *PROPUESTA COMERCIAL RECIBIDA*\nDe: ${nombre} (${telefono})\n${extra}`,
   };
+
+  const msg = mensajes[tipo] || `📬 *${tipo.toUpperCase()}*\nCliente: ${nombre} (${telefono})\n${extra}`;
 
   try {
     const { whatsappPhoneId, whatsappToken } = config?.credenciales || {};
-    await enviarMensaje(DUENO_TEL, mensajes[tipo] || extra, whatsappPhoneId, whatsappToken);
-  } catch (_) {}
+    await enviarMensaje(DUENO_TEL, msg, whatsappPhoneId, whatsappToken);
+    console.log(`[Notif] ✅ Notificación "${tipo}" enviada al dueño (${DUENO_TEL})`);
+  } catch (err) {
+    console.error(`[Notif] ❌ Error enviando notificación "${tipo}":`, err.message);
+  }
 }
 
 // ─── Guardar mensaje en BD ────────────────────────────────────────────────────
