@@ -85,6 +85,23 @@ function extraerCantidad(texto) {
   return match ? parseInt(match[1]) : 1;
 }
 
+// ─── Extrae nombre de producto desde URL de la web propia ────────────────────
+function extraerProductoDeURL(texto, webBase) {
+  if (!webBase || !texto) return null;
+  const dominio = webBase.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toLowerCase();
+  const urlMatch = texto.match(/https?:\/\/[^\s]+/i);
+  if (!urlMatch) return null;
+  const url = urlMatch[0].toLowerCase();
+  if (!url.includes(dominio)) return null;
+  try {
+    const slug = new URL(url).pathname.replace(/^\//, '').split('/')[0];
+    if (!slug || slug.length < 3) return null;
+    return slug.replace(/-/g, ' ').trim();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Obtener contexto de Bsale ────────────────────────────────────────────────
 async function obtenerContextoBsale(query, mayorista = false, telefono = '', nombre = '', config = null) {
   if (!query || query.length < 2) return '';
@@ -214,6 +231,28 @@ async function procesarMensaje(data) {
         await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'document') {
         await enviarMensaje(telefono, '¡Documento recibido! 📄 Lo revisaremos. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
+      }
+      return;
+    }
+
+    // Si el cliente mandó una URL de la web propia, extraer el producto del slug y buscar en Bsale
+    const productoDeURL = extraerProductoDeURL(texto, config.empresa.web);
+    if (productoDeURL) {
+      console.log(`[BOT] 🔗 URL propia detectada → producto: "${productoDeURL}"`);
+      const historialURL = obtenerHistorial(telefono, tenantId);
+      const ctxURL = await obtenerContextoBsale(productoDeURL, false, telefono, nombre, config);
+      if (ctxURL === null) {
+        const resp = `Busqué *"${productoDeURL}"* en nuestro catálogo y actualmente no lo tenemos disponible 😕 ¿Te puedo ayudar con otro producto?`;
+        await enviarMensaje(telefono, resp, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', resp, tenantId);
+        return;
+      }
+      setEtapa(telefono, tenantId, 'explorando');
+      const respURL = await geminiService.generarRespuesta(texto, historialURL, ctxURL, telefono, config);
+      if (respURL) {
+        await enviarMensaje(telefono, respURL, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', respURL, tenantId);
+        if (/💵/.test(ctxURL)) await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
       }
       return;
     }

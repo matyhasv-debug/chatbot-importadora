@@ -184,8 +184,8 @@ function buildReglas(cfg, nombreAsistente) {
 
   // Regla de inventario adaptada
   const reglaInventario = esTienda
-    ? `- NUNCA inventes precios. Si no está en el catálogo, di: "Déjame consultar con bodega y te confirmo en un momento 👌"`
-    : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di: "Déjame verificar la disponibilidad y te confirmo enseguida 👌"`;
+    ? `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"`
+    : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"`;
 
   return `
 === QUIÉN ERES ===
@@ -199,6 +199,7 @@ ${reglaInventario}
 - NUNCA digas que "encontraste" registros si no tienes acceso real. Indica que deben contactar directamente o enviar comprobante.
 - NUNCA des datos bancarios sin que el cliente haya confirmado una acción concreta (compra, reserva, inscripción).
 - NUNCA menciones "sistema", "base de datos", "catálogo" ni términos técnicos al cliente.
+- CRÍTICO: Si en el historial el bot ya dijo que no encontró un producto, NUNCA afirmes después que ese producto está disponible, tiene stock o tiene cierto precio. Esa información es desconocida para ti.
 - Si el cliente pregunta por algo que no ofrecemos, responde amablemente y redirige a lo que sí puedes ayudar.
 - Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
 
