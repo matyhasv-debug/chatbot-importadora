@@ -381,6 +381,38 @@ router.post('/api/tenants', express.json(), (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ─── API admin: info del tenant actual (para el modal de config) ─────────────
+router.get('/api/tenant-info', verificarAdmin, (req, res) => {
+  try {
+    const key    = req.query.key || req.headers['x-admin-key'] || '';
+    const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono FROM tenants WHERE activo = 1 LIMIT 1`).get();
+    if (!tenant) return res.status(404).json({ ok: false });
+    res.json({ ok: true, ...tenant });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── API admin: editar configuración de un tenant ────────────────────────────
+router.put('/api/tenants/:id/config', express.json(), (req, res) => {
+  if ((req.query.key || req.headers['x-admin-key']) !== process.env.PANEL_SECRET)
+    return res.status(401).json({ ok: false, error: 'No autorizado' });
+  try {
+    const tenant = db.prepare(`SELECT id FROM tenants WHERE id = ?`).get(req.params.id);
+    if (!tenant) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
+
+    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','prompt_extra'];
+    const updates = [];
+    const vals    = [];
+    for (const c of campos) {
+      if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
+    }
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'Sin campos a actualizar' });
+    vals.push(req.params.id);
+    db.prepare(`UPDATE tenants SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
+    invalidarCacheByTenantId(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 router.post('/api/tenants/:id/toggle', express.json(), (req, res) => {
   if ((req.query.key || req.headers['x-admin-key']) !== process.env.PANEL_SECRET)
     return res.status(401).json({ ok: false, error: 'No autorizado' });

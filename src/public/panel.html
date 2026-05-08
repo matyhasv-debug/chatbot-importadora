@@ -201,8 +201,33 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     <div class="top-stat pend" id="top-pend">– pendientes</div>
     <div class="top-stat pag" id="top-pag">– pagados</div>
     <div class="avatar" id="avatar-initials">–</div>
+    <button onclick="abrirConfigPanel()" style="background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text2);margin-left:8px">⚙️ Config</button>
   </div>
 </header>
+
+<!-- Modal configuración -->
+<div id="modal-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--surf);border-radius:16px;padding:28px;width:420px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="margin:0;font-size:16px">⚙️ Configuración</h3>
+      <button onclick="cerrarConfigPanel()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">📱 Teléfono notificaciones (56912345678)</label>
+      <input id="cfg-notif-tel" type="text" placeholder="56912345678" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">🏢 Nombre empresa</label>
+      <input id="cfg-empresa" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">📍 Dirección</label>
+      <input id="cfg-dir" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">🕐 Horario</label>
+      <input id="cfg-horario" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">🌐 Sitio web</label>
+      <input id="cfg-web" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+    </div>
+    <button onclick="guardarConfigPanel()" style="margin-top:20px;width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
+    <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
+  </div>
+</div>
 
 <nav class="nav">
   <div class="nav-item active" onclick="switchTab('chat',this)">💬 Conversaciones</div>
@@ -1115,6 +1140,52 @@ async function eliminarProducto(id) {
   await fetch(apiURL('/productos/' + id), { method: 'DELETE', headers: getHeaders() });
   toast('🗑️ Producto eliminado');
   cargarCatalogo();
+}
+
+// ─── Config panel ─────────────────────────────────────────────────────────────
+let _cfgTenantId = null;
+
+async function abrirConfigPanel() {
+  const modal = document.getElementById('modal-config');
+  modal.style.display = 'flex';
+  try {
+    const data = await fetch('/panel/api/tenant-info?key=' + _key).then(r => r.json());
+    if (data.ok) {
+      _cfgTenantId = data.id;
+      document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
+      document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
+      document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
+      document.getElementById('cfg-horario').value    = data.empresa_horario || '';
+      document.getElementById('cfg-web').value        = data.empresa_web   || '';
+    }
+  } catch (_) {}
+}
+
+function cerrarConfigPanel() {
+  document.getElementById('modal-config').style.display = 'none';
+}
+
+async function guardarConfigPanel() {
+  if (!_cfgTenantId) return;
+  const body = {
+    notif_telefono:  document.getElementById('cfg-notif-tel').value.trim(),
+    empresa_nombre:  document.getElementById('cfg-empresa').value.trim(),
+    empresa_dir:     document.getElementById('cfg-dir').value.trim(),
+    empresa_horario: document.getElementById('cfg-horario').value.trim(),
+    empresa_web:     document.getElementById('cfg-web').value.trim(),
+  };
+  const msg = document.getElementById('cfg-msg');
+  try {
+    const r = await fetch('/panel/api/tenants/' + _cfgTenantId + '/config?key=' + _key, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(r => r.json());
+    msg.style.color = r.ok ? 'var(--accent)' : 'var(--danger)';
+    msg.textContent = r.ok ? '✅ Guardado correctamente' : '❌ ' + r.error;
+    if (r.ok) setTimeout(cerrarConfigPanel, 1500);
+  } catch (e) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '❌ Error de conexión';
+  }
 }
 
 </script>
