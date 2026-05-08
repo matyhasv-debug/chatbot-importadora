@@ -74,6 +74,28 @@ function registrarCliente(telefono, nombre, tenantId = null) {
   }
 }
 
+// ─── Carrito persistente ──────────────────────────────────────────────────────
+function guardarCarrito(telefono, tenantId, producto) {
+  try {
+    db.prepare(`UPDATE clientes SET carrito_producto = ? WHERE telefono = ? AND tenant_id = ?`)
+      .run(producto, telefono, tenantId);
+  } catch (_) {}
+}
+
+function limpiarCarrito(telefono, tenantId) {
+  try {
+    db.prepare(`UPDATE clientes SET carrito_producto = NULL WHERE telefono = ? AND tenant_id = ?`)
+      .run(telefono, tenantId);
+  } catch (_) {}
+}
+
+function obtenerCarrito(telefono, tenantId) {
+  try {
+    return db.prepare(`SELECT carrito_producto, estado FROM clientes WHERE telefono = ? AND tenant_id = ?`)
+      .get(telefono, tenantId)?.carrito_producto || null;
+  } catch (_) { return null; }
+}
+
 // ─── Etapa de conversación ────────────────────────────────────────────────────
 function getEtapa(telefono, tenantId) {
   return db.prepare(`SELECT etapa_conversacion FROM clientes WHERE telefono = ? AND tenant_id = ?`)
@@ -419,6 +441,26 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
       case 'SALUDO': {
         const esConocido = db.prepare('SELECT 1 FROM clientes WHERE telefono = ? AND tenant_id = ?').get(telefono, tenantId);
         if (esConocido) {
+          // Recordar carrito si el cliente volvió sin haber comprado
+          const carritoGuardado = obtenerCarrito(telefono, tenantId);
+          const estadoActualCliente = db.prepare(`SELECT estado FROM clientes WHERE telefono = ? AND tenant_id = ?`).get(telefono, tenantId)?.estado;
+          if (carritoGuardado && !['pagado', 'despachado'].includes(estadoActualCliente)) {
+            const ctxCarrito = await obtenerContextoBsale(carritoGuardado, false, telefono, nombre, config);
+            if (ctxCarrito && /💵/.test(ctxCarrito)) {
+              const respCarrito = await geminiService.generarRespuesta(
+                texto, historial,
+                ctxCarrito + `\n\nCRÍTICO: El cliente consultó anteriormente por "${carritoGuardado}" y volvió. Recuérdale amablemente que lo tenía guardado y pregunta si quiere retomar o busca otra cosa. Tono cálido y sin presionar.`,
+                telefono, config
+              );
+              if (respCarrito) {
+                await enviarMensaje(telefono, respCarrito, whatsappPhoneId, whatsappToken);
+                guardarMensaje(telefono, nombre, 'assistant', respCarrito, tenantId);
+                await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
+              }
+              break;
+            }
+          }
+
           const productoEnSaludo = await geminiService.extraerProductoConIA(texto, historial);
           if (productoEnSaludo && productoEnSaludo.length > 2) {
             const ctx = await obtenerContextoBsale(productoEnSaludo, false, telefono, nombre, config);
@@ -470,12 +512,12 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
           respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Buscas otro producto o necesitas algo más? 😊`;
           break;
         }
+        if (/💵/.test(contextoExtra)) guardarCarrito(telefono, tenantId, producto);
         respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra + ctxImagen, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
         if (respuesta) {
           await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
           guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
-          // Solo mostrar botón de compra si hay stock real (contexto contiene precio 💵)
           if (/💵/.test(contextoExtra)) {
             await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
           }
@@ -534,6 +576,7 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
             break;
           }
           contextoExtra = bsaleCtx;
+          if (/💵/.test(bsaleCtx)) guardarCarrito(telefono, tenantId, producto);
         }
         contextoExtra +=
           `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
@@ -564,6 +607,7 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
             `Menciona que el envío se paga aparte al recibir (${envio.courier}). Pide el comprobante por WhatsApp.`;
           respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
           setEtapa(telefono, tenantId, 'pagando');
+          limpiarCarrito(telefono, tenantId);
           followUpService.cancelarSeguimientos(telefono, tenantId);
           followUpService.programarSeguimiento(telefono, 'pago_recordatorio', 120, tenantId);
         } else {

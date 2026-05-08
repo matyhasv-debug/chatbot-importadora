@@ -133,6 +133,17 @@ const migraciones = [
   `ALTER TABLE clientes ADD COLUMN modo_humano INTEGER DEFAULT 0`,
   `ALTER TABLE tenants ADD COLUMN tipo_negocio TEXT DEFAULT 'tienda'`,
   `ALTER TABLE tenants ADD COLUMN prompt_extra TEXT DEFAULT ''`,
+  `ALTER TABLE clientes ADD COLUMN carrito_producto TEXT`,
+  `CREATE TABLE IF NOT EXISTS tenant_usuarios (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+    usuario       TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    rol           TEXT NOT NULL DEFAULT 'vendedor',
+    activo        INTEGER DEFAULT 1,
+    creado_en     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, usuario)
+  )`,
 ];
 
 for (const sql of migraciones) {

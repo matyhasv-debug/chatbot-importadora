@@ -201,7 +201,8 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     <div class="top-stat pend" id="top-pend">– pendientes</div>
     <div class="top-stat pag" id="top-pag">– pagados</div>
     <div class="avatar" id="avatar-initials">–</div>
-    <button onclick="abrirConfigPanel()" style="background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text2);margin-left:8px">⚙️ Config</button>
+    <button onclick="exportarCSV()" style="background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text2)">⬇️ CSV</button>
+    <button onclick="abrirConfigPanel()" style="background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text2)">⚙️ Config</button>
   </div>
 </header>
 
@@ -226,6 +227,21 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <button onclick="guardarConfigPanel()" style="margin-top:20px;width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
+
+    <!-- Usuarios adicionales -->
+    <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Usuarios del panel</div>
+      <div id="cfg-usuarios-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:12px;color:var(--muted)">Cargando...</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input id="cfg-usr-usuario" type="text" placeholder="Usuario (ej: vendedor1)" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <input id="cfg-usr-password" type="password" placeholder="Contraseña" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <select id="cfg-usr-rol" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+          <option value="vendedor">Vendedor (solo lectura del chat)</option>
+          <option value="admin">Admin (acceso completo)</option>
+        </select>
+        <button onclick="agregarUsuario()" style="padding:9px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">+ Agregar usuario</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -243,12 +259,18 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     <aside class="sidebar">
       <div class="sb-head">
         <input class="sb-search" placeholder="Buscar por nombre o teléfono..." oninput="filtrarBusqueda(this.value)">
-        <div class="sb-filters">
+        <div class="sb-filters" id="filtros-estado">
           <button class="chip on" onclick="setFiltro(null,this)">Todos</button>
           <button class="chip" onclick="setFiltro('en_conversacion',this)">💬 Conv.</button>
           <button class="chip" onclick="setFiltro('pago_pendiente',this)">⏳ Pendiente</button>
           <button class="chip" onclick="setFiltro('pagado',this)">✅ Pagado</button>
           <button class="chip" onclick="setFiltro('despachado',this)">🚚 Despachado</button>
+        </div>
+        <div class="sb-filters" id="filtros-fecha" style="margin-top:6px">
+          <button class="chip on" onclick="setFiltroFecha(null,this)">📅 Todos</button>
+          <button class="chip" onclick="setFiltroFecha('hoy',this)">Hoy</button>
+          <button class="chip" onclick="setFiltroFecha('semana',this)">7 días</button>
+          <button class="chip" onclick="setFiltroFecha('mes',this)">30 días</button>
         </div>
         <div class="sb-count" id="sb-count">0 contactos</div>
       </div>
@@ -278,6 +300,7 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
           <button class="btn-hum" id="btn-hum" onclick="toggleHumano()">
             <span id="hum-icon">🤖</span><span id="hum-lbl">Bot activo</span>
           </button>
+          <button class="btn-ver" onclick="enviarFollowUpManual()" title="Enviar follow-up automático ahora">📩 Follow-up</button>
         </div>
         <button class="btn-ver" id="btn-ver" onclick="verTodos()">Ver todos</button>
       </div>
@@ -362,7 +385,7 @@ if (ES_CLIENTE) {
 }
 
 let telefonoActivo = null, nombreActivo = '', estadoActivo = '';
-let humanosActivos = new Set(), filtroEstado = null, busqueda = '';
+let humanosActivos = new Set(), filtroEstado = null, filtroFecha = null, busqueda = '';
 let tabActual = 'chat', humanActivo = false, autoScroll = true;
 let totalMensajesRenderizados = 0;
 let todosContactos = [];
@@ -425,7 +448,14 @@ function switchTab(tab, btn) {
 
 function setFiltro(estado, btn) {
   filtroEstado = estado;
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  document.querySelectorAll('#filtros-estado .chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  renderContactos();
+}
+
+function setFiltroFecha(rango, btn) {
+  filtroFecha = rango;
+  document.querySelectorAll('#filtros-fecha .chip').forEach(c => c.classList.remove('on'));
   btn.classList.add('on');
   renderContactos();
 }
@@ -438,6 +468,11 @@ function filtrarBusqueda(q) {
 function renderContactos() {
   let cs = todosContactos;
   if (filtroEstado) cs = cs.filter(c => c.estado === filtroEstado);
+  if (filtroFecha) {
+    const ahora = Date.now();
+    const ms = filtroFecha === 'hoy' ? 86400000 : filtroFecha === 'semana' ? 7 * 86400000 : 30 * 86400000;
+    cs = cs.filter(c => c.ultimo_mensaje && (ahora - new Date(c.ultimo_mensaje.replace(' ','T')+'Z').getTime()) < ms);
+  }
   if (busqueda) cs = cs.filter(c =>
     (c.nombre || '').toLowerCase().includes(busqueda) ||
     (c.telefono || '').includes(busqueda)
@@ -923,6 +958,69 @@ function conectarSSE() {
   };
 }
 
+function exportarCSV() {
+  if (!ES_CLIENTE) { toast('Solo disponible en panel de cliente', 'var(--amber)'); return; }
+  window.open(apiURL('/exportar-csv'), '_blank');
+}
+
+async function enviarFollowUpManual() {
+  if (!telefonoActivo) return;
+  if (!confirm('¿Enviar follow-up automático a ' + nombreActivo + ' ahora?')) return;
+  try {
+    const res = await fetch(apiURL('/followup-manual'), {
+      method: 'POST', headers: getHeaders(),
+      body: JSON.stringify({ telefono: telefonoActivo, tipo: 'follow_up_precio' })
+    });
+    const d = await res.json();
+    if (d.ok) toast('📩 Follow-up programado — se enviará en el próximo ciclo', 'var(--green)');
+    else toast('❌ Error: ' + (d.error || 'desconocido'), 'var(--red)');
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function cargarUsuarios() {
+  if (!ES_CLIENTE) return;
+  try {
+    const d = await fetch(apiURL('/usuarios'), { headers: getHeaders() }).then(r => r.json());
+    const el = $('cfg-usuarios-list');
+    if (!el) return;
+    if (!d.ok || !d.usuarios?.length) { el.innerHTML = '<span>No hay usuarios adicionales</span>'; return; }
+    el.innerHTML = d.usuarios.map(u =>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surf2);border-radius:8px">
+        <span><strong>${esc(u.usuario)}</strong> <span style="color:var(--muted)">(${u.rol})</span></span>
+        <button onclick="eliminarUsuario(${u.id})" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #FECACA;background:var(--red-light);color:var(--red);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600">Eliminar</button>
+      </div>`
+    ).join('');
+  } catch (_) {}
+}
+
+async function agregarUsuario() {
+  const usuario  = $('cfg-usr-usuario').value.trim();
+  const password = $('cfg-usr-password').value.trim();
+  const rol      = $('cfg-usr-rol').value;
+  if (!usuario || !password) { toast('Completa usuario y contraseña', 'var(--amber)'); return; }
+  try {
+    const res = await fetch(apiURL('/usuarios'), {
+      method: 'POST', headers: getHeaders(),
+      body: JSON.stringify({ usuario, password, rol })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('✅ Usuario creado', 'var(--green)');
+      $('cfg-usr-usuario').value = ''; $('cfg-usr-password').value = '';
+      cargarUsuarios();
+    } else toast('❌ ' + (d.error || 'Error'), 'var(--red)');
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function eliminarUsuario(id) {
+  if (!confirm('¿Eliminar este usuario?')) return;
+  try {
+    await fetch(apiURL('/usuarios/' + id), { method: 'DELETE', headers: getHeaders() });
+    toast('🗑️ Usuario eliminado');
+    cargarUsuarios();
+  } catch (_) {}
+}
+
 (async () => {
   await Promise.all([cargarStats(), cargarContactos(), cargarMensajes(null)]);
   conectarSSE();
@@ -1149,14 +1247,28 @@ async function abrirConfigPanel() {
   const modal = document.getElementById('modal-config');
   modal.style.display = 'flex';
   try {
-    const data = await fetch('/panel/api/tenant-info?key=' + _key).then(r => r.json());
-    if (data.ok) {
-      _cfgTenantId = data.id;
-      document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
-      document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
-      document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
-      document.getElementById('cfg-horario').value    = data.empresa_horario || '';
-      document.getElementById('cfg-web').value        = data.empresa_web   || '';
+    if (ES_CLIENTE) {
+      // Cargar info del tenant desde el endpoint slug
+      const data = await fetch(apiURL('/tenant-info'), { headers: getHeaders() }).then(r => r.json());
+      if (data.ok) {
+        _cfgTenantId = data.id;
+        document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
+        document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
+        document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
+        document.getElementById('cfg-horario').value    = data.empresa_horario || '';
+        document.getElementById('cfg-web').value        = data.empresa_web   || '';
+      }
+      cargarUsuarios();
+    } else {
+      const data = await fetch('/panel/api/tenant-info?key=' + _key).then(r => r.json());
+      if (data.ok) {
+        _cfgTenantId = data.id;
+        document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
+        document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
+        document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
+        document.getElementById('cfg-horario').value    = data.empresa_horario || '';
+        document.getElementById('cfg-web').value        = data.empresa_web   || '';
+      }
     }
   } catch (_) {}
 }
@@ -1166,7 +1278,6 @@ function cerrarConfigPanel() {
 }
 
 async function guardarConfigPanel() {
-  if (!_cfgTenantId) return;
   const body = {
     notif_telefono:  document.getElementById('cfg-notif-tel').value.trim(),
     empresa_nombre:  document.getElementById('cfg-empresa').value.trim(),
@@ -1176,14 +1287,17 @@ async function guardarConfigPanel() {
   };
   const msg = document.getElementById('cfg-msg');
   try {
-    const r = await fetch('/panel/api/tenants/' + _cfgTenantId + '/config?key=' + _key, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    const url = ES_CLIENTE
+      ? apiURL('/tenant-config')
+      : '/panel/api/tenants/' + _cfgTenantId + '/config?key=' + _key;
+    const r = await fetch(url, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify(body)
     }).then(r => r.json());
-    msg.style.color = r.ok ? 'var(--accent)' : 'var(--danger)';
+    msg.style.color = r.ok ? 'var(--accent)' : 'var(--red)';
     msg.textContent = r.ok ? '✅ Guardado correctamente' : '❌ ' + r.error;
     if (r.ok) setTimeout(cerrarConfigPanel, 1500);
   } catch (e) {
-    msg.style.color = 'var(--danger)';
+    msg.style.color = 'var(--red)';
     msg.textContent = '❌ Error de conexión';
   }
 }

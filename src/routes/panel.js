@@ -141,19 +141,27 @@ router.post('/api/login', express.json(), async (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant)
     return res.status(404).json({ ok: false, error: 'Cliente no encontrado' });
-  if (!tenant.panel_usuario || tenant.panel_usuario !== usuario)
-    return res.status(401).json({ ok: false, error: 'Credenciales incorrectas' });
-  if (!tenant.panel_password_hash)
-    return res.status(401).json({ ok: false, error: 'Credenciales no configuradas' });
-  const valida = await bcrypt.compare(password, tenant.panel_password_hash);
-  if (!valida)
-    return res.status(401).json({ ok: false, error: 'Credenciales incorrectas' });
-  const token = jwt.sign(
-    { tenantId: tenant.id, slug: tenant.slug, empresa: tenant.empresa_nombre },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-  res.json({ ok: true, token, slug: tenant.slug, empresa: tenant.empresa_nombre });
+
+  // 1. Intentar login con credenciales del dueño (panel_usuario en tenants)
+  if (tenant.panel_usuario && tenant.panel_usuario === usuario && tenant.panel_password_hash) {
+    const valida = await bcrypt.compare(password, tenant.panel_password_hash);
+    if (valida) {
+      const token = jwt.sign({ tenantId: tenant.id, slug: tenant.slug, empresa: tenant.empresa_nombre, rol: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ ok: true, token, slug: tenant.slug, empresa: tenant.empresa_nombre, rol: 'admin' });
+    }
+  }
+
+  // 2. Intentar login con usuarios adicionales del tenant
+  const usuarioExtra = db.prepare(`SELECT * FROM tenant_usuarios WHERE tenant_id = ? AND usuario = ? AND activo = 1`).get(tenant.id, usuario);
+  if (usuarioExtra) {
+    const valida = await bcrypt.compare(password, usuarioExtra.password_hash);
+    if (valida) {
+      const token = jwt.sign({ tenantId: tenant.id, slug: tenant.slug, empresa: tenant.empresa_nombre, rol: usuarioExtra.rol }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ ok: true, token, slug: tenant.slug, empresa: tenant.empresa_nombre, rol: usuarioExtra.rol });
+    }
+  }
+
+  res.status(401).json({ ok: false, error: 'Credenciales incorrectas' });
 });
 
 // ─── API: Crear/actualizar credenciales de tenant (solo admin) ────────────────
@@ -624,6 +632,32 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
   res.json({ ok, estados: ESTADOS });
 });
 
+// ─── API cliente: info del tenant (config modal) ─────────────────────────────
+router.get('/:slug/api/tenant-info', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  res.json({ ok: true, ...tenant });
+});
+
+// ─── API cliente: actualizar config propia ────────────────────────────────────
+router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web'];
+  const updates = [], vals = [];
+  for (const c of campos) {
+    if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
+  }
+  if (!updates.length) return res.status(400).json({ ok: false, error: 'Sin campos' });
+  vals.push(tenant.id);
+  db.prepare(`UPDATE tenants SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
+  invalidarCacheByTenantId(tenant.id);
+  res.json({ ok: true });
+});
+
 // ─── API cliente: templates de follow-up ─────────────────────────────────────
 const TIPOS_FOLLOWUP = ['follow_up_precio', 'pago_recordatorio', 'post_venta', 'carrito_abandonado'];
 
@@ -753,6 +787,84 @@ router.delete('/:slug/api/productos/:id', (req, res) => {
   invalidarCacheByTenantId(tenant.id);
   res.json({ ok: true });
 });
+// ─── API cliente: exportar CSV ────────────────────────────────────────────────
+router.get('/:slug/api/exportar-csv', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  const rows = db.prepare(`
+    SELECT c.telefono, c.nombre, c.estado, c.carrito_producto,
+           c.primer_pedido, c.ultimo_contacto,
+           (SELECT mensaje FROM conversaciones WHERE telefono = c.telefono AND tenant_id = ? ORDER BY creado_en DESC LIMIT 1) as ultimo_mensaje
+    FROM clientes c
+    WHERE c.tenant_id = ?
+    ORDER BY COALESCE(c.ultimo_contacto, c.primer_pedido) DESC
+  `).all(tenant.id, tenant.id);
+
+  const escape = v => `"${String(v || '').replace(/"/g, '""')}"`;
+  const header = 'Teléfono,Nombre,Estado,Último producto,Fecha primer contacto,Último contacto,Último mensaje\n';
+  const body   = rows.map(r => [r.telefono, r.nombre, r.estado, r.carrito_producto, r.primer_pedido, r.ultimo_contacto, r.ultimo_mensaje].map(escape).join(',')).join('\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${slug}-clientes.csv"`);
+  res.send('﻿' + header + body);
+});
+
+// ─── API cliente: gestión de usuarios adicionales ────────────────────────────
+router.get('/:slug/api/usuarios', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const usuarios = db.prepare(`SELECT id, usuario, rol, activo, creado_en FROM tenant_usuarios WHERE tenant_id = ? ORDER BY creado_en ASC`).all(tenant.id);
+  res.json({ ok: true, usuarios });
+});
+
+router.post('/:slug/api/usuarios', express.json(), async (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { usuario, password, rol = 'vendedor' } = req.body;
+  if (!usuario || !password) return res.status(400).json({ ok: false, error: 'Faltan usuario y contraseña' });
+  if (!['vendedor', 'admin'].includes(rol)) return res.status(400).json({ ok: false, error: 'Rol inválido' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    db.prepare(`INSERT INTO tenant_usuarios (tenant_id, usuario, password_hash, rol) VALUES (?, ?, ?, ?)`).run(tenant.id, usuario.trim(), hash, rol);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) return res.status(409).json({ ok: false, error: 'Ya existe ese usuario' });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete('/:slug/api/usuarios/:id', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM tenant_usuarios WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenant.id);
+  res.json({ ok: true });
+});
+
+// ─── API cliente: follow-up manual ───────────────────────────────────────────
+router.post('/:slug/api/followup-manual', express.json(), async (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { telefono, tipo = 'follow_up_precio' } = req.body;
+  if (!telefono) return res.status(400).json({ ok: false, error: 'Falta telefono' });
+
+  try {
+    const { programarSeguimiento } = require('../services/followUpService');
+    programarSeguimiento(telefono, tipo, 0, tenant.id); // delay 0 = enviar en próximo ciclo
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ─── Panel cliente — DEBE IR AL FINAL ────────────────────────────────────────
 router.get('/:slug', (req, res) => {
   const { slug } = req.params;
