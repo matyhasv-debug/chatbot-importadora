@@ -161,12 +161,25 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
   const terminosIA = await geminiService.expandirTerminoBusqueda(query);
   const terminos = [query, ...terminosIA.filter(t => t.toLowerCase() !== query.toLowerCase())];
   let resultados = [];
+  let fallbackSinStock = null; // primer resultado encontrado pero sin stock
   for (const termino of terminos) {
-    resultados = await bsaleService.buscarConPreciosYStock(termino, mayorista, config?.credenciales?.bsaleToken);
-    if (resultados?.length > 0) {
-      console.log(`✅ Datos de Bsale obtenidos con término: "${termino}"`);
+    const r = await bsaleService.buscarConPreciosYStock(termino, mayorista, config?.credenciales?.bsaleToken);
+    if (!r?.length) continue;
+    if (bsaleService.tieneStock(r)) {
+      resultados = r;
+      console.log(`✅ Datos de Bsale con STOCK obtenidos con término: "${termino}"`);
       break;
     }
+    // Tiene resultados pero sin stock — guardar como fallback y seguir buscando
+    if (!fallbackSinStock) {
+      fallbackSinStock = r;
+      console.log(`⚠️ "${termino}" encontrado pero sin stock, continuando búsqueda...`);
+    }
+  }
+  // Si no encontramos nada con stock, usar el primer resultado sin stock (informa correctamente al cliente)
+  if (!resultados.length && fallbackSinStock) {
+    console.log(`⚠️ Todos los términos sin stock — usando fallback`);
+    resultados = fallbackSinStock;
   }
   if (resultados?.length > 0) {
     return bsaleService.formatearParaBot(resultados);
