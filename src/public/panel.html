@@ -461,63 +461,85 @@ async function cargarStats() {
   } catch (_) {}
 }
 
+// Fecha del último mensaje renderizado — para separadores de fecha en appendMensaje
+let ultimaFechaRenderizada = '';
+
+function renderMensajeHTML(m) {
+  const txt = m.mensaje || '';
+  const isH = txt.startsWith('[HUMANO]');
+  const cls = m.rol === 'user' ? 'user' : isH ? 'human' : 'bot';
+  const av  = m.rol === 'user' ? initials(m.nombre) : isH ? 'TÚ' : 'B';
+  const sender = m.rol === 'user' ? esc(m.nombre || 'Cliente') : isH ? 'Tú' : '🤖 Bot';
+  const limpio = isH ? txt.replace('[HUMANO] ', '') : txt;
+  let mediaHTML = '';
+  try {
+    const med = m.media_json ? JSON.parse(m.media_json) : null;
+    if (med) {
+      const src = '/panel/api/media/' + med.media_id;
+      if (med.tipo === 'image' || med.tipo === 'sticker') mediaHTML = `<img src="${src}" style="max-width:240px;border-radius:8px;border:1px solid var(--border);display:block;margin-top:6px;cursor:pointer" onclick="window.open('${src}','_blank')" loading="lazy">`;
+      else if (med.tipo === 'audio' || med.tipo === 'voice') mediaHTML = `<audio controls src="${src}" style="margin-top:6px;width:220px;accent-color:var(--accent)"></audio>`;
+      else if (med.tipo === 'document') mediaHTML = `<a href="${src}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:6px;text-decoration:none;color:var(--text);font-size:12px;font-weight:500">📄 ${esc(med.filename || 'Documento')}</a>`;
+    }
+  } catch (_) {}
+  return `<div class="msg ${cls}">
+    <div class="msg-av">${av}</div>
+    <div class="msg-body">
+      <div class="msg-meta">
+        <span class="msg-sender">${sender}</span>
+        <span class="msg-time">${fmt(m.creado_en)}</span>
+      </div>
+      <div class="msg-bubble">${esc(limpio)}</div>
+      ${mediaHTML}
+    </div>
+  </div>`;
+}
+
+// Agrega un solo mensaje al DOM sin reconstruir todo — preserva el scroll
+function appendMensaje(m) {
+  const c = $('messages');
+  const empty = c.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const estabaAbajo = c.scrollHeight - c.scrollTop - c.clientHeight < 100;
+
+  const d = fmtDate(m.creado_en);
+  let html = '';
+  if (d !== ultimaFechaRenderizada) {
+    html += `<div class="date-sep"><span>${d}</span></div>`;
+    ultimaFechaRenderizada = d;
+  }
+  html += renderMensajeHTML(m);
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  while (tmp.firstChild) c.appendChild(tmp.firstChild);
+
+  if (estabaAbajo) c.scrollTop = c.scrollHeight;
+}
+
 async function cargarMensajes(telefono, { forceScroll = false } = {}) {
   const url = telefono
-  ? apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200'
-  : apiURL('/mensajes') + '&limite=150';
+    ? apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200'
+    : apiURL('/mensajes') + '&limite=150';
   try {
     const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
     const msgs = data.mensajes || [];
     const c = $('messages');
-    // Guardar distancia desde el fondo ANTES de reemplazar el DOM
-    const distanciaFondo = c.scrollHeight - c.scrollTop - c.clientHeight;
-    const estabaAbajo = forceScroll || distanciaFondo < 100;
     if (!msgs.length) {
       c.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Sin mensajes aún</p></div>';
+      ultimaFechaRenderizada = '';
       return;
     }
     let html = '', lastDate = '';
     for (const m of msgs) {
       const d = fmtDate(m.creado_en);
       if (d !== lastDate) { html += `<div class="date-sep"><span>${d}</span></div>`; lastDate = d; }
-      const txt = m.mensaje || '';
-      const isH = txt.startsWith('[HUMANO]');
-      const cls = m.rol === 'user' ? 'user' : isH ? 'human' : 'bot';
-      const av = m.rol === 'user' ? initials(m.nombre) : isH ? 'TÚ' : 'B';
-      const sender = m.rol === 'user' ? esc(m.nombre || 'Cliente') : isH ? 'Tú' : '🤖 Bot';
-      const limpio = isH ? txt.replace('[HUMANO] ', '') : txt;
-      let mediaHTML = '';
-      try {
-        const med = m.media_json ? JSON.parse(m.media_json) : null;
-        if (med) {
-          const src = '/panel/api/media/' + med.media_id;
-          if (med.tipo === 'image' || med.tipo === 'sticker') mediaHTML = `<img src="${src}" style="max-width:240px;border-radius:8px;border:1px solid var(--border);display:block;margin-top:6px;cursor:pointer" onclick="window.open('${src}','_blank')" loading="lazy">`;
-          else if (med.tipo === 'audio' || med.tipo === 'voice') mediaHTML = `<audio controls src="${src}" style="margin-top:6px;width:220px;accent-color:var(--accent)"></audio>`;
-          else if (med.tipo === 'document') mediaHTML = `<a href="${src}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:6px;text-decoration:none;color:var(--text);font-size:12px;font-weight:500">📄 ${esc(med.filename || 'Documento')}</a>`;
-        }
-      } catch (_) {}
-      html += `<div class="msg ${cls}">
-        <div class="msg-av">${av}</div>
-        <div class="msg-body">
-          <div class="msg-meta">
-            <span class="msg-sender">${sender}</span>
-            <span class="msg-time">${fmt(m.creado_en)}</span>
-          </div>
-          <div class="msg-bubble">${esc(limpio)}</div>
-          ${mediaHTML}
-        </div>
-      </div>`;
+      html += renderMensajeHTML(m);
     }
+    ultimaFechaRenderizada = lastDate;
     c.innerHTML = html;
-    // Restaurar posición de scroll después de reemplazar el DOM
-    setTimeout(() => {
-      if (estabaAbajo) {
-        c.scrollTop = c.scrollHeight;
-      } else {
-        // Mantener la misma distancia desde el fondo para que el usuario siga leyendo donde estaba
-        c.scrollTop = c.scrollHeight - c.clientHeight - distanciaFondo;
-      }
-    }, 30);
+    // Solo scrollear al fondo si el usuario abrió la conversación o ya estaba abajo
+    if (forceScroll) setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
   } catch (_) {}
 }
 
@@ -830,7 +852,7 @@ function conectarSSE() {
     if (data.tipo === 'init') humanosActivos = new Set(data.humanosActivos || []);
     if (data.tipo === 'mensaje') {
       const m = data.mensaje;
-      if (!telefonoActivo || m.telefono === telefonoActivo) cargarMensajes(telefonoActivo);
+      if (!telefonoActivo || m.telefono === telefonoActivo) appendMensaje(m);
       if (m.rol === 'user') { cargarStats(); cargarContactos(); }
     }
     if (data.tipo === 'estado_cliente') {
