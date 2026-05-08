@@ -333,9 +333,13 @@ async function expandirTerminoBusqueda(producto) {
   const prompt = `Eres un experto en importaciones chilenas.
 El cliente busca: "${producto}"
 
-Genera 3-4 términos alternativos en español que podría usar este producto en un sistema de inventario chileno.
+Genera 3-4 términos cortos que un sistema de inventario chileno podría usar para este producto.
+REGLAS:
+- Prefiere palabras cortas y genéricas (1-2 palabras) que aparecen en nombres de catálogo
+- Incluye siempre la palabra principal del producto (ej: "estante", "hervidor", "lámpara")
+- Evita adjetivos descriptivos del cliente (plegable, recargable, multicolor) salvo que sean parte del nombre del producto
 Responde SOLO con los términos separados por coma, sin explicación.
-Ejemplo: "repisa, estantería, shelving, rack"`;
+Ejemplo para "estante plegable multicolor": "estante, estante metalico, estantería, repisa"`;
 
   try {
     const resultado = await llamarGroq([{ role: 'user', content: prompt }], 30, 0);
