@@ -237,6 +237,15 @@ async function procesarMensaje(data) {
       return;
     }
 
+    // Propuesta comercial externa (publicidad, radio, auspicio, etc.) → notificar dueño sin negociar
+    if (/ejecutiv[ao] comercial|oferta.*campaña|campaña.*publicitaria|radio.*fm|auspicio.*programa|frases.*diarias|banner.*web|valor.*iva mensual|publicidad.*radio|patrocinio|sponsor|propuesta.*comercial|agencia.*publicidad/i.test(texto)) {
+      await notificarDueno('propuesta_comercial', telefono, nombre, `Propuesta comercial recibida de ${nombre}: "${texto.slice(0, 200)}"`, config);
+      const respComercial = `¡Hola! 😊 Recibí tu propuesta. La he enviado a quien corresponde para que la evalúen. Si hay interés, te contactarán directamente. ¡Gracias!`;
+      await enviarMensaje(telefono, respComercial, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respComercial, tenantId);
+      return;
+    }
+
     // Cliente quiere ser revendedor → notificar al dueño como lead mayorista
     if (/quiero (vender|revender|ofrecer|comercializar)|soy (revendedor|distribuidor|mayorista|comerciante)|para (vender|revender|ofrecer).*(productos|artículos)|acceso.*imágenes.*(vender|ofrecer|revender)|catálogo.*(descargable|descargar|digital)|ser (proveedor|distribuidor)/i.test(texto)) {
       await notificarDueno('lead_mayorista', telefono, nombre, `Posible revendedor interesado. Mensaje: "${texto.slice(0, 150)}"`, config);
