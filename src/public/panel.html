@@ -224,6 +224,17 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       <input id="cfg-horario" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
       <label style="font-size:12px;font-weight:600;color:var(--muted)">🌐 Sitio web</label>
       <input id="cfg-web" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted)">✈️ Envíos internacionales</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input type="checkbox" id="cfg-intl-activo" style="width:16px;height:16px;cursor:pointer">
+          <span style="font-size:13px;color:var(--text2)">Hacer envíos al extranjero</span>
+        </div>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">💵 Mínimo de compra (USD)</label>
+      <input id="cfg-intl-minimo" type="number" placeholder="2500" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">🚚 Couriers internacionales</label>
+      <input id="cfg-intl-couriers" type="text" placeholder="DHL, FedEx" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
     </div>
     <button onclick="guardarConfigPanel()" style="margin-top:20px;width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
@@ -1252,22 +1263,28 @@ async function abrirConfigPanel() {
       const data = await fetch(apiURL('/tenant-info'), { headers: getHeaders() }).then(r => r.json());
       if (data.ok) {
         _cfgTenantId = data.id;
-        document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
-        document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
-        document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
-        document.getElementById('cfg-horario').value    = data.empresa_horario || '';
-        document.getElementById('cfg-web').value        = data.empresa_web   || '';
+        document.getElementById('cfg-notif-tel').value      = data.notif_telefono || '';
+        document.getElementById('cfg-empresa').value         = data.empresa_nombre || '';
+        document.getElementById('cfg-dir').value             = data.empresa_dir   || '';
+        document.getElementById('cfg-horario').value         = data.empresa_horario || '';
+        document.getElementById('cfg-web').value             = data.empresa_web   || '';
+        document.getElementById('cfg-intl-activo').checked  = !!data.envio_internacional_activo;
+        document.getElementById('cfg-intl-minimo').value    = data.envio_internacional_minimo_usd || '';
+        document.getElementById('cfg-intl-couriers').value  = data.envio_internacional_couriers || '';
       }
       cargarUsuarios();
     } else {
       const data = await fetch('/panel/api/tenant-info?key=' + _key).then(r => r.json());
       if (data.ok) {
         _cfgTenantId = data.id;
-        document.getElementById('cfg-notif-tel').value = data.notif_telefono || '';
-        document.getElementById('cfg-empresa').value   = data.empresa_nombre || '';
-        document.getElementById('cfg-dir').value        = data.empresa_dir   || '';
-        document.getElementById('cfg-horario').value    = data.empresa_horario || '';
-        document.getElementById('cfg-web').value        = data.empresa_web   || '';
+        document.getElementById('cfg-notif-tel').value      = data.notif_telefono || '';
+        document.getElementById('cfg-empresa').value         = data.empresa_nombre || '';
+        document.getElementById('cfg-dir').value             = data.empresa_dir   || '';
+        document.getElementById('cfg-horario').value         = data.empresa_horario || '';
+        document.getElementById('cfg-web').value             = data.empresa_web   || '';
+        document.getElementById('cfg-intl-activo').checked  = !!data.envio_internacional_activo;
+        document.getElementById('cfg-intl-minimo').value    = data.envio_internacional_minimo_usd || '';
+        document.getElementById('cfg-intl-couriers').value  = data.envio_internacional_couriers || '';
       }
     }
   } catch (_) {}
@@ -1279,11 +1296,14 @@ function cerrarConfigPanel() {
 
 async function guardarConfigPanel() {
   const body = {
-    notif_telefono:  document.getElementById('cfg-notif-tel').value.trim(),
-    empresa_nombre:  document.getElementById('cfg-empresa').value.trim(),
-    empresa_dir:     document.getElementById('cfg-dir').value.trim(),
-    empresa_horario: document.getElementById('cfg-horario').value.trim(),
-    empresa_web:     document.getElementById('cfg-web').value.trim(),
+    notif_telefono:                 document.getElementById('cfg-notif-tel').value.trim(),
+    empresa_nombre:                 document.getElementById('cfg-empresa').value.trim(),
+    empresa_dir:                    document.getElementById('cfg-dir').value.trim(),
+    empresa_horario:                document.getElementById('cfg-horario').value.trim(),
+    empresa_web:                    document.getElementById('cfg-web').value.trim(),
+    envio_internacional_activo:     document.getElementById('cfg-intl-activo').checked ? 1 : 0,
+    envio_internacional_minimo_usd: parseInt(document.getElementById('cfg-intl-minimo').value) || 0,
+    envio_internacional_couriers:   document.getElementById('cfg-intl-couriers').value.trim(),
   };
   const msg = document.getElementById('cfg-msg');
   try {

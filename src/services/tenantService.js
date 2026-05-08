@@ -56,6 +56,11 @@ function buildConfig(tenant) {
       courier:   tenant.envio_courier,
       tiempo:    tenant.envio_tiempo,
       quienPaga: tenant.envio_quien_paga,
+      internacional: {
+        activo:    !!tenant.envio_internacional_activo,
+        minimoUSD: tenant.envio_internacional_minimo_usd || 0,
+        couriers:  tenant.envio_internacional_couriers   || '',
+      },
     },
     mayorista: { minimoUnidades: tenant.mayorista_minimo },
     garantia: {

@@ -134,6 +134,9 @@ const migraciones = [
   `ALTER TABLE tenants ADD COLUMN tipo_negocio TEXT DEFAULT 'tienda'`,
   `ALTER TABLE tenants ADD COLUMN prompt_extra TEXT DEFAULT ''`,
   `ALTER TABLE clientes ADD COLUMN carrito_producto TEXT`,
+  `ALTER TABLE tenants ADD COLUMN envio_internacional_activo INTEGER DEFAULT 0`,
+  `ALTER TABLE tenants ADD COLUMN envio_internacional_minimo_usd INTEGER DEFAULT 0`,
+  `ALTER TABLE tenants ADD COLUMN envio_internacional_couriers TEXT DEFAULT ''`,
   `CREATE TABLE IF NOT EXISTS tenant_usuarios (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id     INTEGER NOT NULL REFERENCES tenants(id),

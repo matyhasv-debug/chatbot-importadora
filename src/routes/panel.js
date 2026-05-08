@@ -403,7 +403,7 @@ router.post('/api/tenants', express.json(), (req, res) => {
 router.get('/api/tenant-info', verificarAdmin, (req, res) => {
   try {
     const key    = req.query.key || req.headers['x-admin-key'] || '';
-    const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono FROM tenants WHERE activo = 1 LIMIT 1`).get();
+    const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers FROM tenants WHERE activo = 1 LIMIT 1`).get();
     if (!tenant) return res.status(404).json({ ok: false });
     res.json({ ok: true, ...tenant });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -417,7 +417,7 @@ router.put('/api/tenants/:id/config', express.json(), (req, res) => {
     const tenant = db.prepare(`SELECT id FROM tenants WHERE id = ?`).get(req.params.id);
     if (!tenant) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
 
-    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','prompt_extra'];
+    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','prompt_extra','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
     const updates = [];
     const vals    = [];
     for (const c of campos) {
@@ -635,7 +635,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
@@ -646,7 +646,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web'];
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }

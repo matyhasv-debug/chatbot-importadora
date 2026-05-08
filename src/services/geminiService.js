@@ -81,13 +81,29 @@ ${cfg.empresa.domingos ? '✅ Domingos: Abierto' : '❌ Domingos: Cerrado'}
 
   // Envíos — solo tiendas con courier configurado
   if (esTienda && cfg.envio?.courier) {
+    const intl = cfg.envio.internacional;
     txt += `
-=== ENVÍOS ===
-- Despachamos a todo Chile SOLO por ${cfg.envio.courier} 🚚
+=== ENVÍOS NACIONALES ===
+- Despachamos dentro de Chile SOLO por ${cfg.envio.courier} 🚚
 - El costo de envío lo paga el ${cfg.envio.quienPaga === 'cliente' ? 'cliente al recibir' : 'negocio'}.
 - PROHIBIDO calcular ni inventar montos de envío.
 - Tiempo de despacho: ${cfg.envio.tiempo} tras confirmar pago.
 `;
+    if (intl?.activo && intl.minimoUSD > 0) {
+      txt += `
+=== ENVÍOS INTERNACIONALES ===
+- SÍ hacemos envíos internacionales a otros países.
+- Pedido MÍNIMO: USD ${intl.minimoUSD.toLocaleString('es-CL')} (dólares americanos).
+- Couriers disponibles: ${intl.couriers || 'DHL / FedEx'} ✈️
+- Para coordinar un envío internacional, el cliente debe confirmar el pedido y luego se coordina el despacho por WhatsApp.
+- CRÍTICO: Si el cliente pregunta si hacen envíos internacionales, responder SÍ con el mínimo requerido.
+`;
+    } else {
+      txt += `
+=== ENVÍOS INTERNACIONALES ===
+- NO hacemos envíos fuera de Chile. Solo despacho nacional con ${cfg.envio.courier}.
+`;
+    }
   }
 
   // Datos de pago — si hay banco configurado
