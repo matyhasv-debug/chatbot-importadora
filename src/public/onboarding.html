@@ -309,9 +309,14 @@ tr:hover td{background:var(--surf2)}
       </div>
     </div>
 
-    <button class="btn btn-primary" id="btn-crear" onclick="crearTenant()">
-      Crear cliente
-    </button>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" id="btn-crear" onclick="guardarTenant()">
+        Crear cliente
+      </button>
+      <button class="btn" id="btn-cancelar-edicion" style="display:none;background:var(--muted);color:#fff" onclick="cancelarEdicion()">
+        Cancelar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -360,7 +365,11 @@ async function cargarTenants() {
           <td><span class="badge badge-${t.modo_catalogo || 'bsale'}">${t.modo_catalogo || 'bsale'}</span></td>
           <td><span class="badge ${t.activo ? 'badge-on' : 'badge-off'}">${t.activo ? '✅ Activo' : '❌ Inactivo'}</span></td>
           <td style="color:var(--muted);font-size:12px">${t.creado_en?.slice(0,10) || '-'}</td>
-          <td>
+          <td style="display:flex;gap:6px">
+            <button class="btn-sm" style="background:var(--accent);color:#fff"
+              onclick="editarTenant(${t.id})">
+              ✏️ Editar
+            </button>
             <button class="btn-sm ${t.activo ? 'btn-danger' : 'btn-success'}"
               onclick="toggleTenant(${t.id}, this)">
               ${t.activo ? 'Desactivar' : 'Activar'}
@@ -384,27 +393,68 @@ async function toggleTenant(id, btn) {
   } catch (_) { btn.disabled = false; }
 }
 
-async function crearTenant() {
+let _editandoId = null;
+
+async function editarTenant(id) {
+  try {
+    const data = await fetch(`/panel/api/tenants/${id}?key=${KEY}`).then(r => r.json());
+    if (!data.ok) return toast('❌ No se pudo cargar el tenant', '#DC2626');
+    const t = data.tenant;
+    _editandoId = id;
+
+    // Pre-llenar campos
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    set('slug', t.slug);
+    set('empresa_nombre', t.empresa_nombre);
+    set('empresa_dir', t.empresa_dir);
+    set('empresa_web', t.empresa_web);
+    set('empresa_horario', t.empresa_horario);
+    set('asistentes', JSON.parse(t.asistentes || '[]').join(', '));
+    set('pago_banco', t.pago_banco);
+    set('pago_tipo', t.pago_tipo);
+    set('pago_cuenta', t.pago_cuenta);
+    set('pago_titular', t.pago_titular);
+    set('pago_rut', t.pago_rut);
+    set('pago_email', t.pago_email);
+    set('envio_courier', t.envio_courier);
+    set('envio_tiempo', t.envio_tiempo);
+    set('envio_quien_paga', t.envio_quien_paga);
+    set('garantia_meses', t.garantia_meses);
+    set('garantia_cond', t.garantia_cond);
+    set('bsale_token', t.bsale_token);
+    set('whatsapp_phone_id', t.whatsapp_phone_id);
+    set('whatsapp_token', t.whatsapp_token);
+    set('notif_telefono', t.notif_telefono);
+    set('modo_catalogo', t.modo_catalogo || 'bsale');
+    set('prompt_extra', t.prompt_extra);
+    set('panel_key', t.panel_key);
+    if (document.getElementById('empresa_domingos')) document.getElementById('empresa_domingos').value = t.empresa_domingos ? '1' : '0';
+
+    const btn = document.getElementById('btn-crear');
+    btn.textContent = '💾 Guardar cambios';
+    document.getElementById('btn-cancelar-edicion').style.display = '';
+
+    // Scroll al formulario
+    document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth' });
+    toast('✏️ Editando: ' + t.empresa_nombre, '#2563EB');
+  } catch (err) {
+    toast('❌ Error: ' + err.message, '#DC2626');
+  }
+}
+
+function cancelarEdicion() {
+  _editandoId = null;
+  document.getElementById('btn-crear').textContent = 'Crear cliente';
+  document.getElementById('btn-cancelar-edicion').style.display = 'none';
+}
+
+async function guardarTenant() {
   const btn = document.getElementById('btn-crear');
   btn.disabled = true;
-  btn.textContent = 'Creando...';
+  btn.textContent = _editandoId ? 'Guardando...' : 'Creando...';
 
   const usuario  = document.getElementById('panel_usuario').value.trim();
   const password = document.getElementById('panel_password').value.trim();
-
-  if (!usuario || !password) {
-    toast('❌ Usuario y contraseña son requeridos', '#DC2626');
-    btn.disabled = false;
-    btn.textContent = 'Crear cliente';
-    return;
-  }
-
-  if (password.length < 8) {
-    toast('❌ La contraseña debe tener al menos 8 caracteres', '#DC2626');
-    btn.disabled = false;
-    btn.textContent = 'Crear cliente';
-    return;
-  }
 
   const asistentesRaw = document.getElementById('asistentes').value;
   const asistentes = asistentesRaw.split(',').map(a => a.trim()).filter(Boolean);
@@ -439,8 +489,55 @@ async function crearTenant() {
     panel_key:         '',
   };
 
+  // Modo edición: PUT al tenant existente
+  if (_editandoId) {
+    try {
+      const r = await fetch(`/panel/api/tenants/${_editandoId}/config?key=${KEY}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => r.json());
+
+      if (r.ok) {
+        // Actualizar contraseña solo si se ingresó
+        if (usuario && password) {
+          await fetch(`/panel/api/tenants/${_editandoId}/credenciales?key=${KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, password })
+          });
+        }
+        toast('✅ Cambios guardados correctamente', '#059669');
+        cancelarEdicion();
+        cargarTenants();
+      } else {
+        toast('❌ Error: ' + r.error, '#DC2626');
+      }
+    } catch (err) {
+      toast('❌ Error de conexión', '#DC2626');
+    }
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar cambios';
+    return;
+  }
+
+  // Modo creación: validar y POST
   if (!body.slug || !body.empresa_nombre || !body.whatsapp_phone_id || !body.whatsapp_token) {
     toast('❌ Faltan campos obligatorios (slug, empresa, WhatsApp)', '#DC2626');
+    btn.disabled = false;
+    btn.textContent = 'Crear cliente';
+    return;
+  }
+
+  if (!usuario || !password) {
+    toast('❌ Usuario y contraseña son requeridos', '#DC2626');
+    btn.disabled = false;
+    btn.textContent = 'Crear cliente';
+    return;
+  }
+
+  if (password.length < 8) {
+    toast('❌ La contraseña debe tener al menos 8 caracteres', '#DC2626');
     btn.disabled = false;
     btn.textContent = 'Crear cliente';
     return;
@@ -455,17 +552,13 @@ async function crearTenant() {
     const data = await res.json();
 
     if (data.ok) {
-      // Crear credenciales JWT
       await fetch(`/panel/api/tenants/${data.tenantId}/credenciales?key=${KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario, password })
       });
-
       toast(`✅ Cliente creado — Panel: /panel/${body.slug}`, '#059669');
       cargarTenants();
-
-      // Limpiar formulario
       document.querySelectorAll('input').forEach(i => {
         if (i.id !== 'mayorista_minimo' && i.id !== 'garantia_meses') i.value = '';
       });

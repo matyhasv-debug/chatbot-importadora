@@ -353,6 +353,14 @@ router.get('/api/tenants', verificarAdmin, (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+router.get('/api/tenants/:id', verificarAdmin, (req, res) => {
+  try {
+    const t = db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(req.params.id);
+    if (!t) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    res.json({ ok: true, tenant: t });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 router.post('/api/tenants', express.json(), (req, res) => {
   if ((req.query.key || req.headers['x-admin-key']) !== process.env.PANEL_SECRET)
     return res.status(401).json({ ok: false, error: 'No autorizado' });
