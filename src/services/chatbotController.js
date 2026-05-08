@@ -23,6 +23,7 @@ async function notificarDueno(tipo, telefono, nombre, extra = '', config = null)
     solicitud_humano:   `🙋 *CLIENTE PIDE HABLAR CON PERSONA*\nCliente: ${nombre} (${telefono})\n${extra}`,
     lead_mayorista:     `🛒 *POSIBLE REVENDEDOR/MAYORISTA*\nCliente: ${nombre} (${telefono})\n${extra}`,
     propuesta_comercial:`📢 *PROPUESTA COMERCIAL RECIBIDA*\nDe: ${nombre} (${telefono})\n${extra}`,
+    datos_despacho:     `📍 *DATOS DE DESPACHO RECIBIDOS*\nCliente: ${nombre} (${telefono})\n\n${extra}`,
   };
 
   const msg = mensajes[tipo] || `📬 *${tipo.toUpperCase()}*\nCliente: ${nombre} (${telefono})\n${extra}`;
@@ -195,6 +196,11 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
 // ─── Detección automática de pago ─────────────────────────────────────────────
 function detectarPagoEnTexto(texto) {
   return /comprobante|transfer[ei]|pag[ué]|ya pag|hice la transfer|realic[eé] el pago|te mand[oé] el comprobante|adjunto comprobante|acá el comprobante|acá te mando/.test(texto.toLowerCase());
+}
+
+// ─── Detección de datos de despacho ──────────────────────────────────────────
+function detectarDatosDespacho(texto) {
+  return /(?:\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]|\brut[:\s]|direcci[oó]n|calle\s|av\.\s|avenida|villa |poblaci[oó]n|regi[oó]n|comuna|sector |pasaje|block |depto |departamento|c\.p\.|código postal)/i.test(texto);
 }
 
 function detectarComprobante(data) {
@@ -422,6 +428,11 @@ async function procesarMensaje(data) {
 
     // Si ya está en etapa de pago, no volver al flujo de búsqueda/resumen
     if (etapa === 'pagando') {
+      // Si el cliente envía datos de despacho, notificar al dueño de forma estructurada
+      if (detectarDatosDespacho(texto)) {
+        await notificarDueno('datos_despacho', telefono, nombre, texto.slice(0, 400), config);
+        console.log(`[BOT] 📍 Datos de despacho detectados de ${telefono}`);
+      }
       const ctxPagando = `El cliente ya tiene un pedido confirmado en proceso de pago o despacho.
 Su mensaje actual: "${texto}"
 INSTRUCCIONES según lo que envió:
@@ -705,6 +716,38 @@ INSTRUCCIONES:
 - NO des datos bancarios.
 - Tono amigable y práctico.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, ctxSoporte, telefono, config);
+        break;
+      }
+
+      case 'ESTADO_PEDIDO': {
+        const pedidoActual = db.prepare(`
+          SELECT estado, productos, creado_en FROM pedidos
+          WHERE telefono = ? AND tenant_id = ?
+          ORDER BY creado_en DESC LIMIT 1
+        `).get(telefono, tenantId);
+
+        if (pedidoActual) {
+          const estadosPedido = {
+            pendiente:  'en espera de confirmación ⏳',
+            confirmado: 'confirmado y en preparación 📦',
+            preparando: 'siendo preparado 🔧',
+            listo:      'listo para despacho o retiro ✅',
+            entregado:  'entregado 🎉',
+            cancelado:  'cancelado ❌',
+          };
+          const estadoTexto = estadosPedido[pedidoActual.estado] || pedidoActual.estado;
+          const fecha = new Date(pedidoActual.creado_en).toLocaleDateString('es-CL');
+          respuesta = `📦 *Estado de tu pedido*\n\nProducto: ${pedidoActual.productos}\nFecha: ${fecha}\nEstado: ${estadoTexto}\n\n¿Necesitas algo más? 😊`;
+        } else {
+          const estadoCliente = db.prepare(`SELECT estado FROM clientes WHERE telefono = ? AND tenant_id = ?`).get(telefono, tenantId)?.estado;
+          if (estadoCliente === 'despachado') {
+            respuesta = `🚚 Tu pedido ya fue despachado. Revisa con el courier para el seguimiento de la entrega.`;
+          } else if (estadoCliente === 'pagado' || estadoCliente === 'pago_pendiente') {
+            respuesta = `✅ Tu pago fue recibido y el pedido está siendo procesado. Te avisamos cuando salga para despacho 🚚`;
+          } else {
+            respuesta = `No encontré un pedido registrado a tu nombre 😕 Si ya realizaste una compra, escríbenos el nombre del producto o envíanos el comprobante de pago para ayudarte 📋`;
+          }
+        }
         break;
       }
 

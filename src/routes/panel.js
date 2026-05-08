@@ -533,17 +533,19 @@ router.get('/:slug/api/contactos', (req, res) => {
     `).all(tenant.id, tenant.id, filtroEstado);
     return res.json({ ok: true, contactos });
   }
+  const mostrarArchivados = req.query.archivados === '1';
   const contactos = db.prepare(`
     SELECT c.telefono, c.nombre,
       COALESCE(cl.estado, 'en_conversacion') as estado,
+      COALESCE(cl.archivado, 0) as archivado,
       COUNT(c.id) as total_mensajes,
       MAX(c.creado_en) as ultimo_mensaje
     FROM conversaciones c
     LEFT JOIN clientes cl ON cl.telefono = c.telefono AND cl.tenant_id = ?
-    WHERE c.tenant_id = ?
+    WHERE c.tenant_id = ? AND COALESCE(cl.archivado, 0) = ?
     GROUP BY c.telefono
     ORDER BY ultimo_mensaje DESC LIMIT 200
-  `).all(tenant.id, tenant.id);
+  `).all(tenant.id, tenant.id, mostrarArchivados ? 1 : 0);
   res.json({ ok: true, contactos });
 });
 
@@ -882,6 +884,20 @@ router.post('/:slug/api/followup-manual', express.json(), async (req, res) => {
     programarSeguimiento(telefono, tipo, 0, tenant.id); // delay 0 = enviar en próximo ciclo
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── API cliente: archivar / restaurar conversación ──────────────────────────
+router.post('/:slug/api/archivar-conversacion', express.json(), (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { telefono, archivado = true } = req.body;
+  if (!telefono) return res.status(400).json({ ok: false, error: 'Falta telefono' });
+  db.prepare(`UPDATE clientes SET archivado = ? WHERE telefono = ? AND tenant_id = ?`)
+    .run(archivado ? 1 : 0, telefono, tenant.id);
+  emitirEvento('conversacion_archivada', { telefono, archivado: !!archivado });
+  res.json({ ok: true });
 });
 
 // ─── Panel cliente — DEBE IR AL FINAL ────────────────────────────────────────

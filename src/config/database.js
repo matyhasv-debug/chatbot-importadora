@@ -147,6 +147,7 @@ const migraciones = [
     creado_en     DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(tenant_id, usuario)
   )`,
+  `ALTER TABLE clientes ADD COLUMN archivado INTEGER DEFAULT 0`,
 ];
 
 for (const sql of migraciones) {

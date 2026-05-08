@@ -64,6 +64,39 @@ function encolarMensaje(data) {
   });
 }
 
+// ─── Debounce de texto: agrupa mensajes rápidos del mismo usuario ─────────────
+const DEBOUNCE_MS = 1500;
+const pendingDebounce = new Map(); // tel -> { timer, partes[], baseData }
+
+function encolarConDebounce(data) {
+  // Botones, audio, imagen y otros tipos se procesan de inmediato
+  if (data.tipo !== 'text') {
+    encolarMensaje(data);
+    return;
+  }
+
+  const tel = data.telefono;
+  const pending = pendingDebounce.get(tel);
+
+  if (pending) {
+    clearTimeout(pending.timer);
+    if (data.texto) pending.partes.push(data.texto);
+  } else {
+    pendingDebounce.set(tel, { partes: data.texto ? [data.texto] : [], baseData: data });
+  }
+
+  const entry = pendingDebounce.get(tel);
+  entry.timer = setTimeout(() => {
+    pendingDebounce.delete(tel);
+    const textoFinal = entry.partes.join('\n');
+    const merged = { ...entry.baseData, texto: textoFinal || entry.baseData.texto };
+    if (entry.partes.length > 1) {
+      console.log(`[Debounce] Agrupando ${entry.partes.length} mensajes de ${tel}: "${textoFinal.slice(0, 60)}"`);
+    }
+    encolarMensaje(merged);
+  }, DEBOUNCE_MS);
+}
+
 // ─── POST: Recibir mensajes de WhatsApp ───────────────────────────────────────
 router.post('/', verificarFirma, async (req, res) => {
   // Responder 200 de inmediato (Meta requiere respuesta rápida)
@@ -79,8 +112,8 @@ router.post('/', verificarFirma, async (req, res) => {
     const token   = cfg?.credenciales?.whatsappToken;
     await marcarLeido(data.messageId, phoneId, token);
 
-    // Encolar por usuario — garantiza procesamiento secuencial por teléfono
-    encolarMensaje(data);
+    // Encolar con debounce para texto, inmediato para el resto
+    encolarConDebounce(data);
 
   } catch (err) {
     console.error('[Webhook] Error procesando mensaje:', err);

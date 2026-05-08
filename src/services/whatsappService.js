@@ -13,19 +13,31 @@ function crearApiWA(phoneId, token) {
 
 async function enviarMensaje(telefono, texto, phoneId = null, token = null) {
   const api = crearApiWA(phoneId, token);
-  try {
-    await api.post('/messages', {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: telefono,
-      type: 'text',
-      text: { preview_url: false, body: texto },
-    });
-    console.log(`[WA] ✅ Mensaje enviado a ${telefono}`);
-  } catch (err) {
-    console.error(`[WA] ❌ Error enviando a ${telefono}:`, err.response?.data || err.message);
-    throw err;
+  let ultimoError;
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      await api.post('/messages', {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: telefono,
+        type: 'text',
+        text: { preview_url: false, body: texto },
+      });
+      console.log(`[WA] ✅ Mensaje enviado a ${telefono}${intento > 1 ? ` (intento ${intento})` : ''}`);
+      return;
+    } catch (err) {
+      ultimoError = err;
+      const status = err.response?.status;
+      // No reintentar errores permanentes (credenciales, número inválido, etc.)
+      if (status === 401 || status === 400) break;
+      if (intento < 3) {
+        console.warn(`[WA] Reintento ${intento}/3 para ${telefono} — ${err.response?.data?.error?.message || err.message}`);
+        await new Promise(r => setTimeout(r, intento * 1500));
+      }
+    }
   }
+  console.error(`[WA] ❌ Error enviando a ${telefono}:`, ultimoError.response?.data || ultimoError.message);
+  throw ultimoError;
 }
 
 async function marcarLeido(messageId, phoneId = null, token = null) {

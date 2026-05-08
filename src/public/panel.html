@@ -315,8 +315,12 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
             <span id="hum-icon">🤖</span><span id="hum-lbl">Bot activo</span>
           </button>
           <button class="btn-ver" onclick="enviarFollowUpManual()" title="Enviar follow-up automático ahora">📩 Follow-up</button>
+          <button class="btn-ver" id="btn-archivar" onclick="archivarConversacion()" title="Marcar como resuelta y archivar" style="background:var(--green-light);color:var(--green);border-color:#A7F3D0">✅ Resolver</button>
         </div>
         <button class="btn-ver" id="btn-ver" onclick="verTodos()">Ver todos</button>
+      </div>
+      <div class="chat-search" id="chat-search" style="display:none;padding:8px 16px;background:var(--surf2);border-bottom:1px solid var(--border)">
+        <input id="chat-search-input" type="text" placeholder="🔍 Buscar en la conversación..." oninput="filtrarMensajesChat(this.value)" style="width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;color:var(--text);outline:none;background:var(--surf)">
       </div>
       <div class="messages" id="messages">
         <div class="empty"><div class="empty-icon">💬</div><p>Cargando mensajes...</p></div>
@@ -654,6 +658,9 @@ function seleccionar(tel, nom, est) {
   $('estado-sel').value = estadoActivo;
   humanActivo = humanosActivos.has(tel);
   actualizarModoHumano(humanActivo);
+  // Mostrar barra de búsqueda en chat y limpiarla
+  $('chat-search').style.display = 'block';
+  $('chat-search-input').value = '';
   totalMensajesRenderizados = 0;
   cargarMensajes(tel, { forceScroll: true });
   renderContactos();
@@ -994,6 +1001,9 @@ function conectarSSE() {
       if (data.telefono === telefonoActivo) { humanActivo = data.activo; actualizarModoHumano(data.activo); }
       cargarContactos();
     }
+    if (data.tipo === 'conversacion_archivada') {
+      cargarContactos();
+    }
   };
 }
 
@@ -1058,6 +1068,43 @@ async function eliminarUsuario(id) {
     toast('🗑️ Usuario eliminado');
     cargarUsuarios();
   } catch (_) {}
+}
+
+async function archivarConversacion() {
+  if (!telefonoActivo) return;
+  if (!confirm('¿Marcar esta conversación como resuelta? Desaparecerá de la lista activa.')) return;
+  try {
+    const res = await fetch(apiURL('/archivar-conversacion'), {
+      method: 'POST', headers: getHeaders(),
+      body: JSON.stringify({ telefono: telefonoActivo, archivado: true })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('✅ Conversación resuelta y archivada', 'var(--green)');
+      // Deseleccionar y recargar
+      telefonoActivo = null;
+      $('ch-actions').style.display = 'none';
+      $('chat-search').style.display = 'none';
+      $('ch-name').textContent = 'Selecciona un contacto';
+      $('ch-sub').textContent = 'Vista general en tiempo real';
+      $('messages').innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Selecciona un contacto</p></div>';
+      await cargarContactos();
+    } else {
+      toast('❌ Error al archivar: ' + (d.error || 'desconocido'), 'var(--red)');
+    }
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+function filtrarMensajesChat(q) {
+  const termino = q.trim().toLowerCase();
+  const msgs = document.querySelectorAll('#messages .msg');
+  let count = 0;
+  msgs.forEach(m => {
+    if (!termino) { m.style.display = ''; return; }
+    const txt = m.textContent.toLowerCase();
+    if (txt.includes(termino)) { m.style.display = ''; count++; }
+    else m.style.display = 'none';
+  });
 }
 
 (async () => {
