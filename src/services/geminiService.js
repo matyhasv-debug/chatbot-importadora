@@ -318,6 +318,7 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/horario|abren|cierran|atienden|qué días|ubicaci[oó]n|direcci[oó]n|d[oó]nde (quedan?|est[aá]n?|queda)|de d[oó]nde son/i.test(mensaje)) return 'HORARIO';
   if (/garantía|cambio|devolución|falla|defecto/i.test(mensaje))                             return 'GARANTIA';
   if (/foto|imagen|ver.*producto/i.test(mensaje))                                             return 'CONSULTA_GENERAL';
+  if (/catálogo|catalogo|lista.*productos?|productos? disponibles?|qué (tienen|venden|tienen disponible)/i.test(mensaje)) return 'CATALOGO';
   if (/desarrollador|creó|quien.*hizo/i.test(mensaje))                                       return 'DESARROLLADOR';
   // Soporte técnico: cliente ya tiene el producto y necesita ayuda para usarlo
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';

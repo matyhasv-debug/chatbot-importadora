@@ -603,6 +603,16 @@ Si el cliente pregunta si puede comprar online y retirar hoy: responde que puede
         break;
       }
 
+      case 'CATALOGO': {
+        const web = empresa.web || '';
+        if (web) {
+          respuesta = `¡Claro! 😊 Puedes ver nuestro catálogo completo con fotos y precios en:\n🌐 *${web}*\n\nTambién puedes escribirme el nombre de cualquier producto y te busco precio y stock al instante 🔍`;
+        } else {
+          respuesta = `Escríbeme el nombre del producto que buscas y te doy precio y disponibilidad al instante 😊 ¿Por dónde empezamos?`;
+        }
+        break;
+      }
+
       case 'SOPORTE_TECNICO': {
         setEtapa(telefono, tenantId, 'explorando');
         const prodSoporte = await geminiService.extraerProductoConIA(texto, historial);
