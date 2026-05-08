@@ -435,7 +435,7 @@ async function editarTenant(id) {
     document.getElementById('btn-cancelar-edicion').style.display = '';
 
     // Scroll al formulario
-    document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth' });
+    document.querySelectorAll('.card')[1]?.scrollIntoView({ behavior: 'smooth' });
     toast('✏️ Editando: ' + t.empresa_nombre, '#2563EB');
   } catch (err) {
     toast('❌ Error: ' + err.message, '#DC2626');
