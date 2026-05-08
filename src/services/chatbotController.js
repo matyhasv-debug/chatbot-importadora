@@ -493,7 +493,14 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
         break;
       }
 
-      case 'ENVIO':
+      case 'ENVIO': {
+        contextoExtra = envio.courier
+          ? `CRÍTICO: Solo despachamos con ${envio.courier}. Si el cliente pregunta por otro courier (Starken, Chilexpress, Correos, etc.), responder claramente que SOLO trabajamos con ${envio.courier} y no tenemos acuerdo con otros servicios. El cliente decide si procede o no.`
+          : '';
+        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+        break;
+      }
+
       case 'PAGO':
       case 'GARANTIA':
       case 'HORARIO': {

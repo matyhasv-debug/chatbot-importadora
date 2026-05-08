@@ -308,7 +308,8 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/caja|bulto|embalaje|por mayor|cajas/i.test(mensaje))                                  return 'PRECIO_EMBALAJE';
   if (/^(hola|buenas tardes|buenos días|buenas noches|hey|wenas|buen día)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'SALUDO';
   if (/transfer|número.*cuenta|datos.*banco|rut.*pago|cómo.*pago|como.*pago/i.test(mensaje)) return 'TRANSFERENCIA';
-  if (/horario|abren|cierran|atienden|qué días|ubicaci[oó]n|direcci[oó]n/i.test(mensaje))    return 'HORARIO';
+  if (/env[íi]o|despacho|despachan|courier|starken|chilexpress|blue.?express|correos chile|llega.*cu[aá]ndo|cu[aá]ndo.*llega/i.test(mensaje)) return 'ENVIO';
+  if (/horario|abren|cierran|atienden|qué días|ubicaci[oó]n|direcci[oó]n|d[oó]nde (quedan?|est[aá]n?|queda)|de d[oó]nde son/i.test(mensaje)) return 'HORARIO';
   if (/garantía|cambio|devolución|falla|defecto|no funciona/i.test(mensaje))                 return 'GARANTIA';
   if (/foto|imagen|ver.*producto/i.test(mensaje))                                             return 'CONSULTA_GENERAL';
   if (/desarrollador|creó|quien.*hizo/i.test(mensaje))                                       return 'DESARROLLADOR';

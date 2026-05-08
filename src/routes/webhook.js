@@ -49,6 +49,21 @@ router.get('/', (req, res) => {
   res.sendStatus(403);
 });
 
+// ─── Cola por usuario: evita respuestas dobles cuando llegan mensajes rápido ──
+const colaMensajes = new Map();
+
+function encolarMensaje(data) {
+  const tel      = data.telefono;
+  const anterior = colaMensajes.get(tel) || Promise.resolve();
+  const siguiente = anterior
+    .then(() => procesarMensaje(data))
+    .catch(err => console.error('[Cola] Error procesando mensaje de', tel, ':', err.message));
+  colaMensajes.set(tel, siguiente);
+  siguiente.finally(() => {
+    if (colaMensajes.get(tel) === siguiente) colaMensajes.delete(tel);
+  });
+}
+
 // ─── POST: Recibir mensajes de WhatsApp ───────────────────────────────────────
 router.post('/', verificarFirma, async (req, res) => {
   // Responder 200 de inmediato (Meta requiere respuesta rápida)
@@ -64,8 +79,8 @@ router.post('/', verificarFirma, async (req, res) => {
     const token   = cfg?.credenciales?.whatsappToken;
     await marcarLeido(data.messageId, phoneId, token);
 
-    // Procesar de forma asíncrona
-    await procesarMensaje(data);
+    // Encolar por usuario — garantiza procesamiento secuencial por teléfono
+    encolarMensaje(data);
 
   } catch (err) {
     console.error('[Webhook] Error procesando mensaje:', err);
