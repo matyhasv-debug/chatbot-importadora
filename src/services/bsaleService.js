@@ -47,10 +47,13 @@ function generarVariantesBusqueda(query) {
   const singularCompleto = procesarSingular(q);
   if (singularCompleto) variantes.add(singularCompleto);
 
-  if (palabras[0].length > 3) {
-    variantes.add(palabras[0]);
-    const singularPalabra = procesarSingular(palabras[0]);
-    if (singularPalabra) variantes.add(singularPalabra);
+  // Agregar cada palabra significativa por separado (>3 chars) para ampliar búsqueda
+  for (const p of palabras) {
+    if (p.length > 3) {
+      variantes.add(p);
+      const s = procesarSingular(p);
+      if (s) variantes.add(s);
+    }
   }
 
   return [...variantes];

@@ -124,7 +124,9 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
   }
 
   // modo === 'bsale' (default)
-  const terminos = await geminiService.expandirTerminoBusqueda(query);
+  // Siempre intentar primero el término original, luego las variantes IA
+  const terminosIA = await geminiService.expandirTerminoBusqueda(query);
+  const terminos = [query, ...terminosIA.filter(t => t.toLowerCase() !== query.toLowerCase())];
   let resultados = [];
   for (const termino of terminos) {
     resultados = await bsaleService.buscarConPreciosYStock(termino, mayorista, config?.credenciales?.bsaleToken);
