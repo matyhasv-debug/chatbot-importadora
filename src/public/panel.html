@@ -461,15 +461,16 @@ async function cargarStats() {
   } catch (_) {}
 }
 
-async function cargarMensajes(telefono) {
+async function cargarMensajes(telefono, { forceScroll = false } = {}) {
   const url = telefono
   ? apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200'
   : apiURL('/mensajes') + '&limite=150';
-const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
   try {
-    const data = await fetch(url).then(r => r.json());
+    const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
     const msgs = data.mensajes || [];
     const c = $('messages');
+    // Solo hacer auto-scroll si el usuario ya estaba cerca del final
+    const estabaAbajo = forceScroll || (c.scrollHeight - c.clientHeight - c.scrollTop < 100);
     if (!msgs.length) {
       c.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Sin mensajes aún</p></div>';
       return;
@@ -507,7 +508,7 @@ const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
       </div>`;
     }
     c.innerHTML = html;
-    setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
+    if (estabaAbajo) setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
   } catch (_) {}
 }
 
@@ -523,7 +524,7 @@ function seleccionar(tel, nom, est) {
   $('estado-sel').value = estadoActivo;
   humanActivo = humanosActivos.has(tel);
   actualizarModoHumano(humanActivo);
-  cargarMensajes(tel);
+  cargarMensajes(tel, { forceScroll: true });
   renderContactos();
 }
 
@@ -536,7 +537,7 @@ function verTodos() {
   $('ch-badge').innerHTML = '';
   $('ch-actions').style.display = 'none';
   actualizarModoHumano(false);
-  cargarMensajes();
+  cargarMensajes(null, { forceScroll: true });
   renderContactos();
 }
 
