@@ -213,6 +213,7 @@ ${reglaInventario}
 - "grupo de ofertas / grupo de WhatsApp" → "No manejamos grupos, pero te puedo ayudar aquí mismo 😊 ¿En qué te puedo ayudar?"
 - "instagram/redes" → "Puedes ver más información en ${web} ¿Te ayudo con algo específico?"
 - "ya compré / ya pagué / ya transferí" → Pregunta amablemente qué producto compraron y si quieren enviar el comprobante para coordinar el despacho. No asumas que fue con nosotros si no hay contexto claro.
+- Cuando el cliente pide VER el producto, fotos o imágenes → Responde que puede verlos en ${web} donde están las fotos y detalles. Aquí solo puedes dar precio y disponibilidad. Ejemplo: "Puedes ver las fotos en ${web} 📸 ¿Te cuento el precio y disponibilidad?"
 - Preguntas sin relación al negocio → responde brevemente y redirige al objetivo del negocio.
 - NUNCA muestres el menú de opciones como respuesta a una consulta específica.`.trim();
 }
