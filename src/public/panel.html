@@ -236,7 +236,10 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       <label style="font-size:12px;font-weight:600;color:var(--muted)">🚚 Couriers internacionales</label>
       <input id="cfg-intl-couriers" type="text" placeholder="DHL, FedEx" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
     </div>
-    <button onclick="guardarConfigPanel()" style="margin-top:20px;width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
+    <div style="display:flex;gap:8px;margin-top:20px">
+      <button onclick="guardarConfigPanel()" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
+      <button onclick="testNotificacion()" style="padding:12px 16px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text2)" title="Envía un mensaje de prueba al número de notificaciones">🧪 Test</button>
+    </div>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
 
     <!-- Usuarios adicionales -->
@@ -682,10 +685,35 @@ async function cambiarEstado(v) {
       estadoActivo = v;
       $('ch-badge').innerHTML = ' ' + badgeHTML(v);
       const s = ESTADOS[v];
-      toast(s.e + ' Estado: ' + s.label, 'var(--text)');
+      if (data.notif) {
+        if (data.notif.ok) toast(s.e + ' ' + s.label + ' — Notificación enviada ✅', 'var(--green)');
+        else toast('⚠️ Estado guardado pero notificación falló: ' + data.notif.razon, 'var(--amber)');
+      } else {
+        toast(s.e + ' Estado: ' + s.label, 'var(--text)');
+      }
       await Promise.all([cargarContactos(), cargarStats()]);
     }
   } catch (_) {}
+}
+
+async function testNotificacion() {
+  if (!ES_CLIENTE) { toast('Solo disponible en panel de cliente', 'var(--amber)'); return; }
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Enviando...';
+  try {
+    const d = await fetch(apiURL('/test-notificacion'), { method: 'POST', headers: getHeaders() }).then(r => r.json());
+    const msg = $('cfg-msg');
+    if (d.ok) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✅ Mensaje de prueba enviado — revisa tu WhatsApp';
+    } else {
+      msg.style.color = 'var(--red)';
+      msg.textContent = '❌ Error: ' + (d.razon || 'desconocido');
+    }
+  } catch (_) {
+    $('cfg-msg').textContent = '❌ Error de conexión';
+  }
+  btn.disabled = false; btn.textContent = '🧪 Test';
 }
 
 async function toggleHumano() {

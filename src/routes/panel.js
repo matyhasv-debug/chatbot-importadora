@@ -596,6 +596,40 @@ router.post('/:slug/api/responder', express.json(), async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.response?.data?.error?.message || err.message }); }
 });
 
+// ─── Helper: enviar notificación WhatsApp al dueño ───────────────────────────
+async function enviarNotifDueno(tenant, slug, body) {
+  const DUENO_TEL = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
+  const phoneId   = tenant.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
+  const tok       = tenant.whatsapp_token    || process.env.WHATSAPP_TOKEN;
+  console.log(`[Notif/${slug}] tel:${DUENO_TEL || 'SIN_TEL'} phoneId:${phoneId || 'SIN_ID'} token:${tok ? 'OK' : 'SIN_TOKEN'}`);
+  if (!DUENO_TEL) return { ok: false, razon: 'Sin notif_telefono configurado' };
+  if (!phoneId)   return { ok: false, razon: 'Sin whatsapp_phone_id' };
+  if (!tok)       return { ok: false, razon: 'Sin whatsapp_token' };
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+      { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL, type: 'text', text: { preview_url: false, body } },
+      { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
+    );
+    console.log(`[Notif/${slug}] ✅ Enviada a ${DUENO_TEL}`);
+    return { ok: true };
+  } catch (err) {
+    const detalle = JSON.stringify(err.response?.data || err.message);
+    console.error(`[Notif/${slug}] ❌ Error:`, detalle);
+    return { ok: false, razon: detalle };
+  }
+}
+
+// ─── API cliente: test de notificación ───────────────────────────────────────
+router.post('/:slug/api/test-notificacion', express.json(), async (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const resultado = await enviarNotifDueno(tenant, slug, `🧪 *Test de notificación*\nSi ves este mensaje, las notificaciones están funcionando correctamente ✅`);
+  res.json(resultado);
+});
+
 // ─── API cliente: cambiar estado ──────────────────────────────────────────────
 router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
   const { slug } = req.params;
@@ -606,30 +640,15 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
   if (!telefono || !estado) return res.status(400).json({ ok: false, error: 'Faltan datos' });
   if (!ESTADOS[estado]) return res.status(400).json({ ok: false, error: 'Estado inválido' });
   const ok = actualizarEstadoCliente(telefono, estado);
+  let notifResultado = null;
   if (ok && (estado === 'pagado' || estado === 'despachado')) {
-    const DUENO_TEL = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
-    const phoneId   = tenant.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
-    const tok       = tenant.whatsapp_token    || process.env.WHATSAPP_TOKEN;
-    console.log(`[Panel/${slug}] Estado → ${estado} | notif_tel: ${DUENO_TEL || 'NO CONFIGURADO'} | phoneId: ${phoneId || 'SIN PHONE_ID'} | token: ${tok ? 'OK' : 'SIN TOKEN'}`);
-    if (DUENO_TEL && phoneId && tok) {
-      const cliente = db.prepare(`SELECT nombre FROM clientes WHERE telefono = ?`).get(telefono);
-      const nombre = cliente?.nombre || telefono;
-      try {
-        await axios.post(
-          `https://graph.facebook.com/v18.0/${phoneId}/messages`,
-          { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL,
-            type: 'text', text: { preview_url: false, body: `${ESTADOS[estado].emoji} *Estado actualizado*\nCliente: ${nombre} (${telefono})\nNuevo estado: *${ESTADOS[estado].label}*` } },
-          { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
-        );
-        console.log(`[Panel/${slug}] ✅ Notificación enviada a ${DUENO_TEL}`);
-      } catch (err) {
-        console.error(`[Panel/${slug}] ❌ Error notificando:`, err.response?.data || err.message);
-      }
-    } else {
-      console.warn(`[Panel/${slug}] ⚠️ Notificación omitida: falta ${!DUENO_TEL ? 'notif_telefono' : ''} ${!phoneId ? 'phone_id' : ''} ${!tok ? 'token' : ''}`.trim());
-    }
+    const cliente = db.prepare(`SELECT nombre FROM clientes WHERE telefono = ?`).get(telefono);
+    const nombre  = cliente?.nombre || telefono;
+    notifResultado = await enviarNotifDueno(tenant, slug,
+      `${ESTADOS[estado].emoji} *Estado actualizado*\nCliente: ${nombre} (${telefono})\nNuevo estado: *${ESTADOS[estado].label}*`
+    );
   }
-  res.json({ ok, estados: ESTADOS });
+  res.json({ ok, estados: ESTADOS, notif: notifResultado });
 });
 
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
