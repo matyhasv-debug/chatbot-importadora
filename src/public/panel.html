@@ -339,6 +339,7 @@ if (ES_CLIENTE) {
 let telefonoActivo = null, nombreActivo = '', estadoActivo = '';
 let humanosActivos = new Set(), filtroEstado = null, busqueda = '';
 let tabActual = 'chat', humanActivo = false, autoScroll = true;
+let totalMensajesRenderizados = 0;
 let todosContactos = [];
 
 const $ = id => document.getElementById(id);
@@ -522,12 +523,16 @@ async function cargarMensajes(telefono, { forceScroll = false } = {}) {
     ? apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200'
     : apiURL('/mensajes') + '&limite=150';
   try {
+    const c = $('messages');
+    const distanciaFondo = c.scrollHeight - c.scrollTop - c.clientHeight;
+    const estabaAbajo = forceScroll || distanciaFondo < 100;
+
     const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
     const msgs = data.mensajes || [];
-    const c = $('messages');
     if (!msgs.length) {
       c.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Sin mensajes aún</p></div>';
       ultimaFechaRenderizada = '';
+      totalMensajesRenderizados = 0;
       return;
     }
     let html = '', lastDate = '';
@@ -537,9 +542,29 @@ async function cargarMensajes(telefono, { forceScroll = false } = {}) {
       html += renderMensajeHTML(m);
     }
     ultimaFechaRenderizada = lastDate;
+    totalMensajesRenderizados = msgs.length;
     c.innerHTML = html;
-    // Solo scrollear al fondo si el usuario abrió la conversación o ya estaba abajo
-    if (forceScroll) setTimeout(() => { c.scrollTop = c.scrollHeight; }, 30);
+    setTimeout(() => {
+      if (estabaAbajo) {
+        c.scrollTop = c.scrollHeight;
+      } else {
+        c.scrollTop = c.scrollHeight - c.clientHeight - distanciaFondo;
+      }
+    }, 30);
+  } catch (_) {}
+}
+
+// Para el polleo periódico: solo agrega mensajes nuevos sin tocar el DOM existente
+async function polearMensajes(telefono) {
+  if (!telefono) return;
+  const url = apiURL('/mensajes') + '&telefono=' + telefono + '&limite=200';
+  try {
+    const data = await fetch(url, { headers: getHeaders() }).then(r => r.json());
+    const msgs = data.mensajes || [];
+    if (msgs.length > totalMensajesRenderizados) {
+      msgs.slice(totalMensajesRenderizados).forEach(m => appendMensaje(m));
+      totalMensajesRenderizados = msgs.length;
+    }
   } catch (_) {}
 }
 
@@ -555,6 +580,7 @@ function seleccionar(tel, nom, est) {
   $('estado-sel').value = estadoActivo;
   humanActivo = humanosActivos.has(tel);
   actualizarModoHumano(humanActivo);
+  totalMensajesRenderizados = 0;
   cargarMensajes(tel, { forceScroll: true });
   renderContactos();
 }
@@ -640,7 +666,7 @@ async function enviarMsg() {
     if (data.ok) {
       input.value = ''; input.style.height = 'auto';
       toast('✅ Mensaje enviado', 'var(--green)');
-      await cargarMensajes(telefonoActivo);
+      await cargarMensajes(telefonoActivo, { forceScroll: true });
     } else { toast('❌ Error al enviar', 'var(--red)'); }
   } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
   finally { $('send-btn').disabled = false; input.focus(); }
@@ -877,7 +903,7 @@ function conectarSSE() {
   conectarSSE();
   setInterval(cargarStats, 30000);
   setInterval(cargarContactos, 15000);
-  if (ES_CLIENTE) setInterval(() => { if (telefonoActivo) cargarMensajes(telefonoActivo); }, 10000);
+  if (ES_CLIENTE) setInterval(() => polearMensajes(telefonoActivo), 10000);
   setInterval(() => { if (tabActual === 'followups') cargarFollowUps(); }, 60000);
   setInterval(() => { if (tabActual === 'catalogo') cargarCatalogo(); }, 60000);
   })();
