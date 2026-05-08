@@ -205,9 +205,11 @@ async function procesarMensaje(data) {
       await notificarDueno('comprobante', telefono, nombre, '', config);
     }
 
-    if (!texto) {
+    // Imágenes/audio/video sin caption llegan como texto "[IMAGE]", "[AUDIO]", etc.
+    const textoEsMedia = !texto || /^\[(IMAGE|AUDIO|VOICE|VIDEO|DOCUMENT|STICKER|LOCATION)\]$/.test(texto);
+    if (textoEsMedia) {
       if (mediaInfo?.tipo === 'image') {
-        await enviarMensaje(telefono, '¡Gracias por tu imagen! 📸 La revisaremos pronto. ¿Hay algo más en que te podamos ayudar?', whatsappPhoneId, whatsappToken);
+        await enviarMensaje(telefono, 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'audio' || mediaInfo?.tipo === 'voice') {
         await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'document') {
@@ -280,6 +282,28 @@ async function procesarMensaje(data) {
     let respuesta     = '';
     let contextoExtra = '';
 
+    // Nota para el AI cuando el cliente adjuntó una imagen con texto (caption)
+    const ctxImagen = (mediaInfo?.tipo === 'image')
+      ? '\n\nCRÍTICO: El cliente adjuntó una imagen a este mensaje. NO puedes verla ni analizar su contenido. NUNCA afirmes que identificaste algo en ella. Si pregunta qué hay en la imagen, dile honestamente que no puedes verla y pídele que escriba el nombre del producto.'
+      : '';
+
+    // Si ya está en etapa de pago, no volver al flujo de búsqueda/resumen
+    if (etapa === 'pagando') {
+      const ctxPagando = `El cliente ya tiene un pedido confirmado en proceso de pago o despacho.
+Su mensaje actual: "${texto}"
+INSTRUCCIONES según lo que envió:
+• Datos de envío (nombre, RUT, teléfono, dirección, región, comuna): Confirma que recibiste los datos y que coordinarás el despacho a la brevedad.
+• Pregunta por estado del pedido: Infórmale que está siendo procesado y que le avisarán.
+• Otra consulta distinta: Atiéndela, pero no repitas el resumen del pedido anterior.
+PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo. Dar los datos bancarios otra vez.${ctxImagen}`;
+      const resp = await geminiService.generarRespuesta(texto, historial, ctxPagando, telefono, config);
+      if (resp) {
+        await enviarMensaje(telefono, resp, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', resp, tenantId);
+      }
+      return;
+    }
+
     if (detectarObjecionPrecio(texto)) {
       contextoExtra = `El cliente dice que el precio le parece alto o que lo vio más barato.
 1. NO bajas el precio.
@@ -350,7 +374,7 @@ async function procesarMensaje(data) {
           respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Buscas otro producto o necesitas algo más? 😊`;
           break;
         }
-        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra + ctxImagen, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
         // Enviar botones de acción después de mostrar el producto
         if (respuesta) {
@@ -490,7 +514,7 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
           const esMayor  = cantidad >= bsaleService.MINIMO_MAYORISTA;
           contextoExtra  = await obtenerContextoBsale(prodAnterior, esMayor, telefono, nombre, config);
         }
-        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+        respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra + ctxImagen, telefono, config);
         break;
       }
     }
