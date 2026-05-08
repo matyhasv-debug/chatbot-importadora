@@ -374,15 +374,17 @@ async function procesarMensaje(data) {
 
     if (payload === 'confirmar_pedido') {
       const historial2 = obtenerHistorial(telefono, tenantId);
-      const prodAnterior = await geminiService.extraerProductoConIA('quiero comprarlo', historial2);
+      // Priorizar carrito guardado (sabemos que tenía stock cuando se guardó)
+      // Si no hay carrito, extraer con IA del historial como fallback
+      const carritoActual = obtenerCarrito(telefono, tenantId);
+      const prodAnterior  = carritoActual || await geminiService.extraerProductoConIA('quiero comprarlo', historial2);
+      console.log(`[BOT] 🛒 confirmar_pedido | carrito: "${carritoActual}" | extraído: "${prodAnterior}"`);
       let ctxConfirmar = '';
       if (prodAnterior && prodAnterior.length > 2) {
         const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
         if (bsaleCtx && /💵/.test(bsaleCtx)) {
-          // Hay stock — proceder con confirmación
           ctxConfirmar = bsaleCtx;
         } else {
-          // Sin stock — informar al cliente sin intentar confirmar
           const sinStockResp = `Lo siento, ese producto no está disponible en este momento 😕. ¿Te puedo ayudar a buscar otra opción?`;
           await enviarMensaje(telefono, sinStockResp, whatsappPhoneId, whatsappToken);
           guardarMensaje(telefono, nombre, 'assistant', sinStockResp, tenantId);
