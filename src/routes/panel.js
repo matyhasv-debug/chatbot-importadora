@@ -600,17 +600,25 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
   const ok = actualizarEstadoCliente(telefono, estado);
   if (ok && (estado === 'pagado' || estado === 'despachado')) {
     const DUENO_TEL = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
-    if (DUENO_TEL) {
+    const phoneId   = tenant.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
+    const tok       = tenant.whatsapp_token    || process.env.WHATSAPP_TOKEN;
+    console.log(`[Panel/${slug}] Estado → ${estado} | notif_tel: ${DUENO_TEL || 'NO CONFIGURADO'} | phoneId: ${phoneId || 'SIN PHONE_ID'} | token: ${tok ? 'OK' : 'SIN TOKEN'}`);
+    if (DUENO_TEL && phoneId && tok) {
       const cliente = db.prepare(`SELECT nombre FROM clientes WHERE telefono = ?`).get(telefono);
       const nombre = cliente?.nombre || telefono;
       try {
         await axios.post(
-          `https://graph.facebook.com/v18.0/${tenant.whatsapp_phone_id}/messages`,
+          `https://graph.facebook.com/v18.0/${phoneId}/messages`,
           { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL,
             type: 'text', text: { preview_url: false, body: `${ESTADOS[estado].emoji} *Estado actualizado*\nCliente: ${nombre} (${telefono})\nNuevo estado: *${ESTADOS[estado].label}*` } },
-          { headers: { Authorization: `Bearer ${tenant.whatsapp_token}`, 'Content-Type': 'application/json' } }
+          { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
         );
-      } catch (err) { console.error('[Panel] Error notificando:', err.message); }
+        console.log(`[Panel/${slug}] ✅ Notificación enviada a ${DUENO_TEL}`);
+      } catch (err) {
+        console.error(`[Panel/${slug}] ❌ Error notificando:`, err.response?.data || err.message);
+      }
+    } else {
+      console.warn(`[Panel/${slug}] ⚠️ Notificación omitida: falta ${!DUENO_TEL ? 'notif_telefono' : ''} ${!phoneId ? 'phone_id' : ''} ${!tok ? 'token' : ''}`.trim());
     }
   }
   res.json({ ok, estados: ESTADOS });
