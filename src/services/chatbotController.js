@@ -554,7 +554,13 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
       case 'PAGO':
       case 'GARANTIA':
       case 'HORARIO': {
-        respuesta = await geminiService.generarRespuesta(texto, historial, '', telefono, config);
+        const ctxHorario = `INFORMACIÓN DE LA TIENDA:
+📍 Dirección: ${empresa.direccion}
+🕐 Horario: ${empresa.horario}
+${empresa.domingos ? '✅ Abierto los domingos' : '❌ Cerrado los domingos'}
+🛒 Retiro en tienda: Sí, los clientes pueden pasar a retirar sus pedidos en persona en el horario indicado.
+Si el cliente pregunta si puede comprar online y retirar hoy: responde que puede pasar a retirar en nuestra dirección durante el horario de atención.`;
+        respuesta = await geminiService.generarRespuesta(texto, historial, ctxHorario, telefono, config);
         break;
       }
 
