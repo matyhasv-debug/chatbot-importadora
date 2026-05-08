@@ -210,13 +210,17 @@ function formatearParaBot(resultados) {
           lineas.push(`  _(Para +${MINIMO_MAYORISTA} unidades consulta precio mayorista)_`);
         }
       } else {
-        lineas.push(`${desc}⏳ *PRONTO VOLVERÁ*`);
-        lineas.push(`  Actualmente no tenemos stock, pero ¡no te preocupes! Ya viene en camino 😊`);
+        lineas.push(`${desc}⏳ *SIN STOCK*`);
+        lineas.push(`  Actualmente no tenemos unidades disponibles.`);
       }
     });
 
     return lineas.join('\n');
   }).join('\n\n');
+}
+
+function tieneStock(resultados) {
+  return Array.isArray(resultados) && resultados.some(p => p.variantes?.some(v => v.stock > 0));
 }
 
 module.exports = {
@@ -225,5 +229,6 @@ module.exports = {
   obtenerPrecios: obtenerDatosVariante,
   buscarConPreciosYStock,
   formatearParaBot,
+  tieneStock,
   MINIMO_MAYORISTA,
 };

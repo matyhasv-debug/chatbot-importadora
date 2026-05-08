@@ -256,7 +256,16 @@ async function procesarMensaje(data) {
       let ctxConfirmar = '';
       if (prodAnterior && prodAnterior.length > 2) {
         const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
-        if (bsaleCtx) ctxConfirmar = bsaleCtx;
+        if (bsaleCtx && /💵/.test(bsaleCtx)) {
+          // Hay stock — proceder con confirmación
+          ctxConfirmar = bsaleCtx;
+        } else {
+          // Sin stock — informar al cliente sin intentar confirmar
+          const sinStockResp = `Lo siento, ese producto no está disponible en este momento 😕. ¿Te puedo ayudar a buscar otra opción?`;
+          await enviarMensaje(telefono, sinStockResp, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'assistant', sinStockResp, tenantId);
+          return;
+        }
       }
       ctxConfirmar += '\n\nEl cliente confirmó que quiere comprar. Muestra el resumen del pedido con precio y pregunta "¿Confirmamos? 😊". NO des datos bancarios todavía.';
       const respuesta = await geminiService.generarRespuesta('quiero comprarlo', historial2, ctxConfirmar, telefono, config);
@@ -376,12 +385,14 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
         }
         respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra + ctxImagen, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
-        // Enviar botones de acción después de mostrar el producto
         if (respuesta) {
           await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
           guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
-          await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
-          respuesta = ''; // ya enviado, evitar doble envío al final
+          // Solo mostrar botón de compra si hay stock real (contexto contiene precio 💵)
+          if (/💵/.test(contextoExtra)) {
+            await enviarBotonesConfirmar(telefono, whatsappPhoneId, whatsappToken);
+          }
+          respuesta = '';
         }
         break;
       }
