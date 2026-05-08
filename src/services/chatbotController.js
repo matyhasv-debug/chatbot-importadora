@@ -235,6 +235,15 @@ async function procesarMensaje(data) {
       return;
     }
 
+    // Cliente pide hablar con una persona → notificar al dueño y pausar bot
+    if (/hablar con (una? )?(persona|humano|alguien|encargado|dueño|vendedor|asesor)|necesito (un )?humano|quiero (un )?asesor|atención (humana|personal)|no (quiero|me gusta) (hablar con )?(el |un )?bot/i.test(texto)) {
+      await notificarDueno('solicitud_humano', telefono, nombre, `El cliente solicitó hablar con una persona. Último mensaje: "${texto}"`, config);
+      const respHumano = `Entendido 😊 Ya avisé a nuestro equipo. Un(a) asesor(a) de *${empresa.nombre}* te contactará a la brevedad en este mismo chat.\n\n📍 También puedes visitarnos en ${empresa.direccion}\n🕐 ${empresa.horario}`;
+      await enviarMensaje(telefono, respHumano, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respHumano, tenantId);
+      return;
+    }
+
     // URLs externas (Instagram, YouTube, etc.) → preguntar qué producto es
     if (/https?:\/\/[^\s]+/i.test(texto) && !extraerProductoDeURL(texto, config.empresa.web)) {
       const respURL = `Veo que enviaste un link 😊 ¿Qué producto te interesa? Escríbeme el nombre y lo busco en nuestro catálogo 🔍`;
@@ -560,7 +569,20 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
       }
 
       case 'PAGO':
-      case 'GARANTIA':
+      case 'GARANTIA': {
+        const ctxGarantia = `POLÍTICA DE GARANTÍA:
+✅ Garantía: ${garantia.meses} meses por defectos de fábrica desde la fecha de compra.
+📋 Condiciones: ${garantia.condicion || 'El producto no debe tener daños físicos causados por el cliente.'}
+📍 Para hacer efectiva la garantía el cliente debe:
+  1. Traer el producto con el defecto al local: ${empresa.direccion}
+  2. Presentar la boleta o comprobante de compra.
+  3. El producto no debe tener daños físicos externos.
+🕐 Horario de atención: ${empresa.horario}
+INSTRUCCIONES: Explica el proceso de garantía claramente. Si el producto fue comprado dentro del plazo, confirma que está cubierto y da los pasos. NO digas "Déjame consultar con bodega". Si el problema suena a mal uso (no defecto de fábrica), explícalo amablemente.`;
+        respuesta = await geminiService.generarRespuesta(texto, historial, ctxGarantia, telefono, config);
+        break;
+      }
+
       case 'HORARIO': {
         const ctxHorario = `INFORMACIÓN DE LA TIENDA:
 📍 Dirección: ${empresa.direccion}
