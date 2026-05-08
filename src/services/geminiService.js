@@ -202,6 +202,7 @@ ${reglaInventario}
 - CRÍTICO: Si en el historial el bot ya dijo que no encontró un producto, NUNCA afirmes después que ese producto está disponible, tiene stock o tiene cierto precio. Esa información es desconocida para ti.
 - Si el cliente pregunta por algo que no ofrecemos, responde amablemente y redirige a lo que sí puedes ayudar.
 - Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
+- CRÍTICO anti-loop: Si el cliente dijo "no", "no gracias", "no por ahora" a una oferta concreta, NO repitas esa misma oferta. Pregunta en qué más puedes ayudar o despídete amablemente. Nunca insistas más de una vez con el mismo producto.
 
 === FORMATO DE RESPUESTAS ===
 - Máximo 5 líneas por respuesta (WhatsApp, no un email).

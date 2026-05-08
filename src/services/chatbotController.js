@@ -235,6 +235,15 @@ async function procesarMensaje(data) {
       return;
     }
 
+    // Cliente quiere ser revendedor → notificar al dueño como lead mayorista
+    if (/quiero (vender|revender|ofrecer|comercializar)|soy (revendedor|distribuidor|mayorista|comerciante)|para (vender|revender|ofrecer).*(productos|artículos)|acceso.*imágenes.*(vender|ofrecer|revender)|catálogo.*(descargable|descargar|digital)|ser (proveedor|distribuidor)/i.test(texto)) {
+      await notificarDueno('lead_mayorista', telefono, nombre, `Posible revendedor interesado. Mensaje: "${texto.slice(0, 150)}"`, config);
+      const respRevend = `¡Gracias por tu interés en trabajar con nosotros! 😊 Esto lo maneja directamente nuestro equipo. Ya les avisé y te contactarán a la brevedad para darte toda la información.\n\n📍 También puedes pasar por ${empresa.direccion}\n🕐 ${empresa.horario}`;
+      await enviarMensaje(telefono, respRevend, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respRevend, tenantId);
+      return;
+    }
+
     // Cliente pide hablar con una persona → notificar al dueño y pausar bot
     if (/hablar con (una? )?(persona|humano|alguien|encargado|dueño|vendedor|asesor)|necesito (un )?humano|quiero (un )?asesor|atención (humana|personal)|no (quiero|me gusta) (hablar con )?(el |un )?bot/i.test(texto)) {
       await notificarDueno('solicitud_humano', telefono, nombre, `El cliente solicitó hablar con una persona. Último mensaje: "${texto}"`, config);
