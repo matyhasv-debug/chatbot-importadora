@@ -463,6 +463,53 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
   </div>
 
+  <!-- Modal nueva campaña (estático, fuera del innerHTML dinámico) -->
+  <div id="modal-campana" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+    <div style="background:var(--surf);border-radius:16px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h3 style="margin:0;font-size:16px">📢 Nueva campaña</h3>
+        <button onclick="cerrarModal('modal-campana')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Nombre de la campaña</label>
+          <input id="camp-nombre" type="text" placeholder="ej: Promo mayo, Clientes VIP" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Mensaje</label>
+          <textarea id="camp-mensaje" placeholder="Hola {{nombre}}, tenemos una oferta especial para ti..." style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);resize:vertical;font-family:'Plus Jakarta Sans',sans-serif;line-height:1.5"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por estado</label>
+            <select id="camp-filtro-estado" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+              <option value="">Todos los estados</option>
+              <option value="en_conversacion">💬 En conversación</option>
+              <option value="consultando">🔍 Consultando</option>
+              <option value="cotizado">📋 Cotizado</option>
+              <option value="pago_pendiente">⏳ Pago pendiente</option>
+              <option value="pagado">✅ Pagado</option>
+              <option value="despachado">🚚 Despachado</option>
+              <option value="abandono">👻 Abandono</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por etiqueta</label>
+            <input id="camp-filtro-tag" type="text" placeholder="ej: VIP, mayorista" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+          </div>
+        </div>
+        <div style="background:var(--surf2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;color:var(--text2)" id="camp-preview-txt">Haz clic en "Ver destinatarios" para contar</span>
+          <button onclick="previewCampana()" style="padding:6px 12px;background:var(--surf);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap">Ver destinatarios</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px">
+        <button onclick="cerrarModal('modal-campana')" style="flex:1;padding:11px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Cancelar</button>
+        <button onclick="crearCampana()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Guardar campaña</button>
+      </div>
+    </div>
+  </div>
+
  <div class="view" id="view-catalogo">
     <div class="metrics-wrap" id="catalogo-content">
       <div class="empty"><div class="empty-icon">📦</div><p>Cargando catálogo...</p></div>
@@ -1822,6 +1869,8 @@ const CAMP_ESTADOS = {
 
 async function cargarCampanas() {
   if (!ES_CLIENTE) { $('campanas-content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>Solo disponible en panel de cliente</p></div>'; return; }
+  // No re-renderizar si el modal está abierto (el usuario está escribiendo)
+  if ($('modal-campana') && $('modal-campana').style.display === 'flex') return;
   try {
     const d = await fetch(apiURL('/campanas'), { headers: getHeaders() }).then(r => r.json());
     const cs = d.campanas || [];
@@ -1862,52 +1911,6 @@ async function cargarCampanas() {
         </div>` : '<div class="empty" style="padding:40px 0"><div class="empty-icon">📢</div><p>Sin campañas. Crea la primera.</p></div>'}
       </div>
 
-      <!-- Modal nueva campaña -->
-      <div id="modal-campana" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
-        <div style="background:var(--surf);border-radius:16px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-            <h3 style="margin:0;font-size:16px">📢 Nueva campaña</h3>
-            <button onclick="cerrarModal('modal-campana')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div>
-              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Nombre de la campaña</label>
-              <input id="camp-nombre" type="text" placeholder="ej: Promo mayo, Clientes VIP" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
-            </div>
-            <div>
-              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Mensaje</label>
-              <textarea id="camp-mensaje" placeholder="Hola {{nombre}}, tenemos una oferta especial para ti..." style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);resize:vertical;font-family:'Plus Jakarta Sans',sans-serif;line-height:1.5"></textarea>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-              <div>
-                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por estado</label>
-                <select id="camp-filtro-estado" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
-                  <option value="">Todos los estados</option>
-                  <option value="en_conversacion">💬 En conversación</option>
-                  <option value="consultando">🔍 Consultando</option>
-                  <option value="cotizado">📋 Cotizado</option>
-                  <option value="pago_pendiente">⏳ Pago pendiente</option>
-                  <option value="pagado">✅ Pagado</option>
-                  <option value="despachado">🚚 Despachado</option>
-                  <option value="abandono">👻 Abandono</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por etiqueta</label>
-                <input id="camp-filtro-tag" type="text" placeholder="ej: VIP, mayorista" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
-              </div>
-            </div>
-            <div style="background:var(--surf2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
-              <span style="font-size:12px;color:var(--text2)" id="camp-preview-txt">Haz clic en "Ver destinatarios" para contar</span>
-              <button onclick="previewCampana()" style="padding:6px 12px;background:var(--surf);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap">Ver destinatarios</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:20px">
-            <button onclick="cerrarModal('modal-campana')" style="flex:1;padding:11px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Cancelar</button>
-            <button onclick="crearCampana()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Guardar campaña</button>
-          </div>
-        </div>
-      </div>
     `;
   } catch(_) { $('campanas-content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Error cargando campañas</p></div>'; }
 }
