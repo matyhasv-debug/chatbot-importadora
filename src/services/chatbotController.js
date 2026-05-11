@@ -5,7 +5,7 @@ const geminiService   = require('./geminiService');
 const bsaleService    = require('./bsaleService');
 const followUpService = require('./followUpService');
 const tenantService   = require('./tenantService');
-const { enviarMensaje, enviarMenu, enviarBotonesConfirmar } = require('./whatsappService');
+const { enviarMensaje, enviarMenu, enviarBotonesConfirmar, reenviarMedia } = require('./whatsappService');
 const catalogoService = require('./catalogoService');
 const pdfService      = require('./pdfService');
 const pagoService     = require('./pagoService');
@@ -304,13 +304,24 @@ async function procesarMensaje(data) {
       followUpService.cancelarSeguimientos(telefono, tenantId);
       console.log(`[BOT] 🧾 Comprobante recibido de ${telefono}`);
       await notificarDueno('comprobante', telefono, nombre, '', config);
+      // Reenviar el comprobante directamente al WhatsApp del dueño para que lo vea
+      const dueno = config?.credenciales?.notifTelefono || process.env.DUENO_WHATSAPP;
+      if (dueno && mediaInfo.media_id) {
+        const caption = `🧾 Comprobante de *${nombre}* (${telefono})`;
+        await reenviarMedia(dueno, mediaInfo.media_id, mediaInfo.tipo, caption, whatsappPhoneId, whatsappToken).catch(() => {});
+      }
     }
 
     // Imágenes/audio/video sin caption llegan como texto "[IMAGE]", "[AUDIO]", etc.
     const textoEsMedia = !texto || /^\[(IMAGE|AUDIO|VOICE|VIDEO|DOCUMENT|STICKER|LOCATION)\]$/.test(texto);
     if (textoEsMedia) {
       if (mediaInfo?.tipo === 'image') {
-        await enviarMensaje(telefono, 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊', whatsappPhoneId, whatsappToken);
+        // Si es imagen que puede ser comprobante, responder diferente
+        if (detectarComprobante(data)) {
+          await enviarMensaje(telefono, '¡Comprobante recibido! 🧾 Lo revisaremos y coordinaremos tu pedido a la brevedad. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
+        } else {
+          await enviarMensaje(telefono, 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊', whatsappPhoneId, whatsappToken);
+        }
       } else if (mediaInfo?.tipo === 'audio' || mediaInfo?.tipo === 'voice') {
         await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'document') {

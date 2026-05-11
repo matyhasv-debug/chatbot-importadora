@@ -40,6 +40,24 @@ async function enviarMensaje(telefono, texto, phoneId = null, token = null) {
   throw ultimoError;
 }
 
+async function reenviarMedia(destino, mediaId, tipo, caption, phoneId = null, token = null) {
+  const api = crearApiWA(phoneId, token);
+  const tipoWA = tipo === 'document' ? 'document' : 'image';
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: destino,
+    type: tipoWA,
+    [tipoWA]: { id: mediaId, caption: caption || '' },
+  };
+  try {
+    await api.post('/messages', payload);
+    console.log(`[WA] ✅ Media reenviada a ${destino}`);
+  } catch (err) {
+    console.error(`[WA] ❌ Error reenviando media a ${destino}:`, err.response?.data || err.message);
+  }
+}
+
 async function marcarLeido(messageId, phoneId = null, token = null) {
   const api = crearApiWA(phoneId, token);
   try {
@@ -157,4 +175,4 @@ function parsearWebhook(body) {
   }
 }
 
-module.exports = { enviarMensaje, marcarLeido, enviarMenu, enviarBotonesConfirmar, parsearWebhook };
+module.exports = { enviarMensaje, marcarLeido, enviarMenu, enviarBotonesConfirmar, parsearWebhook, reenviarMedia };
