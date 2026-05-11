@@ -220,6 +220,8 @@ ${reglaInventario}
 - Si el cliente pregunta por algo que no ofrecemos, responde amablemente y redirige a lo que sí puedes ayudar.
 - Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
 - CRÍTICO anti-loop: Si el cliente dijo "no", "no gracias", "no por ahora" a una oferta concreta, NO repitas esa misma oferta. Pregunta en qué más puedes ayudar o despídete amablemente. Nunca insistas más de una vez con el mismo producto.
+- NUNCA digas "tomaré nota", "anotaré esto", "coordinaré con el courier" o "tu pedido está siendo procesado/despachado" — no tienes esa capacidad técnica. Si el cliente da datos de envío, responde que los recibirá el equipo y se contactarán. Si pregunta por estado de despacho, indícale que contacte directamente.
+- NUNCA confirmes que un pedido está en despacho si el cliente NO ha enviado comprobante de pago en esta conversación.
 
 === FORMATO DE RESPUESTAS ===
 - Máximo 5 líneas por respuesta (WhatsApp, no un email).
@@ -361,6 +363,7 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
   // Afirmaciones cortas solas: nunca disparar compra, dejar que el contexto las maneje
   if (/^(si+|sii+|s[ií]|ok|dale|listo|claro|bueno|perfecto|de acuerdo|ta bien|ta bueno|ya po|ya|por fa|por favor|porfa)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'CONFIRMAR';
+  if (/\b(ir[eé]|voy|paso|pasar[eé]|me aparezco|vengo|ir\s*al?)\b.{0,20}\b(tienda|local|ah[ií]|all[aá]|buscar|retirar)\b|\b(retiro|recojo|busco)\b.{0,20}\b(tienda|local|personal|directo|yo\s*mismo)\b/i.test(mensaje)) return 'RETIRO_TIENDA';
   // Despedidas y negaciones explícitas — SIEMPRE antes del clasificador IA para evitar que confunda con confirmaciones
   if (/^(no\s*(,\s*)?(gracias?|grac\w*)|no\s*por\s*(ahora|el\s*momento)|hasta\s*(luego|mañana|la\s*vista|pronto)|chao|adios|adiós|bye|eso\s*(es\s*)?(todo|nomás?)|de\s*nada|nada\s*más?|qued[oó]|ok\s*chao|ok\s*gracias?)[\s!.,¡¿🙏🥹👋]*$/i.test(mensaje.trim())) return 'DESPEDIDA';
   // Payload de botón enviado como texto

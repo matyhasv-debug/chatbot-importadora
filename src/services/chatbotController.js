@@ -685,8 +685,14 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
           }
 
           // Flujo normal: datos de transferencia bancaria
+          // Recuperar cantidad del historial reciente para no resetear a 1
+          const textoHistorialReciente = historial.slice(-8).map(m => m.mensaje).join(' ');
+          const cantConfirmada = extraerCantidad(textoHistorialReciente);
+          const instrCantidad = cantConfirmada > 1
+            ? `\nCRÍTICO: La cantidad pedida es ${cantConfirmada} unidades. Usa ese número para calcular el total (${cantConfirmada} × precio unitario). NO uses 1 unidad.`
+            : '';
           contextoExtra +=
-            '\n\nEl cliente confirmó el pedido. Entrega los datos de transferencia completos.\n' +
+            '\n\nEl cliente confirmó el pedido. Entrega los datos de transferencia completos.' + instrCantidad + '\n' +
             `Menciona que el envío se paga aparte al recibir (${envio.courier}). Pide el comprobante por WhatsApp.`;
           respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
           setEtapa(telefono, tenantId, 'pagando');
@@ -749,6 +755,16 @@ ${empresa.domingos ? '✅ Abierto los domingos' : '❌ Cerrado los domingos'}
 🛒 Retiro en tienda: Sí, los clientes pueden pasar a retirar sus pedidos en persona en el horario indicado.
 Si el cliente pregunta si puede comprar online y retirar hoy: responde que puede pasar a retirar en nuestra dirección durante el horario de atención.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, ctxHorario, telefono, config);
+        break;
+      }
+
+      case 'RETIRO_TIENDA': {
+        const ctxRetiro = `El cliente quiere retirar su pedido en la tienda en persona.
+📍 Dirección: ${empresa.direccion}
+🕐 Horario: ${empresa.horario}
+${empresa.domingos ? '✅ Abierto los domingos' : '❌ Cerrado los domingos'}
+INSTRUCCIÓN CRÍTICA: Confirma que puede pasar a retirar en ese horario. NO des datos bancarios ni menciones transferencia. NO digas que "coordinarás" nada. Solo di que te espera en la tienda y que al llegar puede pagar y retirar.`;
+        respuesta = await geminiService.generarRespuesta(texto, historial, ctxRetiro, telefono, config);
         break;
       }
 
