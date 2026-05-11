@@ -38,21 +38,28 @@ function generarVariantesBusqueda(query) {
     variantes.add(`${palabras[0]} ${palabras[1]}`);
   }
 
-  const procesarSingular = (texto) => {
-    if (texto.endsWith('es') && texto.length > 4) return texto.slice(0, -2);
-    if (texto.endsWith('s') && !texto.endsWith('es') && texto.length > 3) return texto.slice(0, -1);
-    return null;
+  // Genera variantes singulares de una palabra en español.
+  // Agrega AMBAS formas cuando termina en 'es' para cubrir:
+  //   "estantes" → "estante" (quitar 's') Y "estant" (quitar 'es')
+  // Bsale ignora los términos que no existen, así que variantes extra no hacen daño.
+  const procesarSingulares = (texto) => {
+    const res = [];
+    if (texto.endsWith('es') && texto.length > 4) {
+      res.push(texto.slice(0, -1));  // quitar solo 's' → "estante"
+      res.push(texto.slice(0, -2));  // quitar 'es'    → "estant" / "camion"
+    } else if (texto.endsWith('s') && texto.length > 3) {
+      res.push(texto.slice(0, -1));
+    }
+    return res;
   };
 
-  const singularCompleto = procesarSingular(q);
-  if (singularCompleto) variantes.add(singularCompleto);
+  for (const s of procesarSingulares(q)) variantes.add(s);
 
   // Agregar cada palabra significativa por separado (>3 chars) para ampliar búsqueda
   for (const p of palabras) {
     if (p.length > 3) {
       variantes.add(p);
-      const s = procesarSingular(p);
-      if (s) variantes.add(s);
+      for (const s of procesarSingulares(p)) variantes.add(s);
     }
   }
 
