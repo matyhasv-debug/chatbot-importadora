@@ -907,6 +907,12 @@ Explica que el equipo académico se contactará a la brevedad para completar la 
         break;
       }
 
+      case 'DESPEDIDA': {
+        // Respuesta fija sin pasar por IA para evitar alucinaciones de confirmación de pedido
+        respuesta = '¡Hasta luego! 👋 Cuando necesites algo más, aquí estamos 😊';
+        break;
+      }
+
       default: {
         const prodAnterior = await geminiService.extraerProductoConIA(texto, historial);
         if (prodAnterior && prodAnterior.length > 2) {

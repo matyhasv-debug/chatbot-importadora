@@ -216,6 +216,7 @@ ${reglaInventario}
 - NUNCA des datos bancarios sin que el cliente haya confirmado una acción concreta (compra, reserva, inscripción).
 - NUNCA menciones "sistema", "base de datos", "catálogo" ni términos técnicos al cliente.
 - CRÍTICO: Si en el historial el bot ya dijo que no encontró un producto, NUNCA afirmes después que ese producto está disponible, tiene stock o tiene cierto precio. Esa información es desconocida para ti.
+- CRÍTICO ANTI-ALUCINACIÓN DE PRECIOS: NUNCA menciones un precio ($X), modelo o disponibilidad de un producto que NO esté escrito explícitamente en el [CATÁLOGO] de este mensaje. Si no tienes datos del catálogo, di SOLAMENTE "No tengo esa información disponible en este momento, te recomiendo visitar ${web} para ver precios actualizados 😊". NUNCA inventes alternativas ni rangos de precios.
 - Si el cliente pregunta por algo que no ofrecemos, responde amablemente y redirige a lo que sí puedes ayudar.
 - Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
 - CRÍTICO anti-loop: Si el cliente dijo "no", "no gracias", "no por ahora" a una oferta concreta, NO repitas esa misma oferta. Pregunta en qué más puedes ayudar o despídete amablemente. Nunca insistas más de una vez con el mismo producto.
@@ -360,6 +361,10 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
   // Afirmaciones cortas solas: nunca disparar compra, dejar que el contexto las maneje
   if (/^(si+|sii+|s[ií]|ok|dale|listo|claro|bueno|perfecto|de acuerdo|ta bien|ta bueno|ya po|ya|por fa|por favor|porfa)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'CONFIRMAR';
+  // Despedidas y negaciones explícitas — SIEMPRE antes del clasificador IA para evitar que confunda con confirmaciones
+  if (/^(no\s*(,\s*)?(gracias?|grac\w*)|no\s*por\s*(ahora|el\s*momento)|hasta\s*(luego|mañana|la\s*vista|pronto)|chao|adios|adiós|bye|eso\s*(es\s*)?(todo|nomás?)|de\s*nada|nada\s*más?|qued[oó]|ok\s*chao|ok\s*gracias?)[\s!.,¡¿🙏🥹👋]*$/i.test(mensaje.trim())) return 'DESPEDIDA';
+  // Payload de botón enviado como texto
+  if (/^confirmar[_\s]pedido$/i.test(mensaje.trim())) return 'CONFIRMAR_PEDIDO';
 
   return await detectarIntencionIA(mensaje, historialDB);
 }
