@@ -233,7 +233,10 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <label style="font-size:12px;font-weight:600;color:var(--muted)">📱 Teléfono notificaciones (56912345678)</label>
-      <input id="cfg-notif-tel" type="text" placeholder="56912345678" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="cfg-notif-tel" type="text" placeholder="56912345678" style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
+        <button onclick="testNotificacion()" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);white-space:nowrap">🧪 Probar</button>
+      </div>
       <label style="font-size:12px;font-weight:600;color:var(--muted)">🏢 Nombre empresa</label>
       <input id="cfg-empresa" type="text" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg)">
       <label style="font-size:12px;font-weight:600;color:var(--muted)">📍 Dirección</label>
@@ -256,7 +259,6 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <div style="display:flex;gap:8px;margin-top:20px">
       <button onclick="guardarConfigPanel()" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar cambios</button>
-      <button onclick="testNotificacion()" style="padding:12px 16px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text2)" title="Envía un mensaje de prueba al número de notificaciones">🧪 Test</button>
     </div>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
 
@@ -885,21 +887,25 @@ async function cambiarEstado(v) {
 async function testNotificacion() {
   if (!ES_CLIENTE) { toast('Solo disponible en panel de cliente', 'var(--amber)'); return; }
   const btn = event.target;
-  btn.disabled = true; btn.textContent = '⏳ Enviando...';
+  btn.disabled = true; btn.textContent = '⏳...';
   try {
     const d = await fetch(apiURL('/test-notificacion'), { method: 'POST', headers: getHeaders() }).then(r => r.json());
-    const msg = $('cfg-msg');
     if (d.ok) {
-      msg.style.color = 'var(--green)';
-      msg.textContent = '✅ Mensaje de prueba enviado — revisa tu WhatsApp';
+      toast('✅ Notificación enviada — revisa tu WhatsApp', 'var(--green)');
     } else {
-      msg.style.color = 'var(--red)';
-      msg.textContent = '❌ Error: ' + (d.razon || 'desconocido');
+      const razon = d.razon || 'Error desconocido';
+      // Mensajes de error amigables según la causa
+      let ayuda = razon;
+      if (razon.includes('notif_telefono')) ayuda = 'Falta el teléfono de notificaciones. Guárdalo primero.';
+      else if (razon.includes('phone_id'))  ayuda = 'Falta el WhatsApp Phone ID en la configuración del tenant.';
+      else if (razon.includes('token'))     ayuda = 'El token de WhatsApp no está configurado.';
+      else if (razon.includes('100'))       ayuda = 'Token de WhatsApp inválido o expirado.';
+      alert('❌ No se pudo enviar la notificación\n\nCausa: ' + ayuda + '\n\nDetalle técnico: ' + razon);
     }
   } catch (_) {
-    $('cfg-msg').textContent = '❌ Error de conexión';
+    alert('❌ Error de conexión con el servidor');
   }
-  btn.disabled = false; btn.textContent = '🧪 Test';
+  btn.disabled = false; btn.textContent = '🧪 Probar';
 }
 
 async function toggleHumano() {
