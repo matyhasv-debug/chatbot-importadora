@@ -189,6 +189,24 @@ const migraciones = [
   `ALTER TABLE tenants ADD COLUMN panel_logo_url TEXT DEFAULT ''`,
   `ALTER TABLE tenants ADD COLUMN panel_color TEXT DEFAULT '#1D4ED8'`,
   `ALTER TABLE tenants ADD COLUMN panel_titulo TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN google_client_id TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN google_client_secret TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN google_refresh_token TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN google_calendar_id TEXT DEFAULT 'primary'`,
+  `CREATE TABLE IF NOT EXISTS citas (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id       INTEGER NOT NULL REFERENCES tenants(id),
+    telefono        TEXT NOT NULL,
+    nombre          TEXT,
+    servicio        TEXT,
+    fecha           TEXT NOT NULL,
+    hora            TEXT,
+    notas           TEXT,
+    estado          TEXT DEFAULT 'confirmada',
+    google_event_id TEXT,
+    creado_en       DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_citas_tenant ON citas(tenant_id, fecha)`,
 ];
 
 for (const sql of migraciones) {

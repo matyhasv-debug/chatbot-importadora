@@ -304,6 +304,7 @@ Clasifica el mensaje actual considerando el contexto. Categorías:
 - HORARIO: pregunta por horarios, ubicación o dirección
 - SOPORTE_TECNICO: ya tiene el producto y pregunta cómo usarlo, configurarlo, o pide tutorial/pasos
 - ESTADO_PEDIDO: pregunta por el estado, seguimiento o fecha de llegada de un pedido ya realizado
+- AGENDAR_CITA: quiere agendar una cita, reservar hora, pedir turno o reunión
 - INICIAR_MATRICULA: quiere matricularse, inscribirse, postular o pagar matrícula/arancel
 - SALUDO: saludo sin consulta específica
 - AYUDA: pide ayuda general o menú de opciones
@@ -326,6 +327,20 @@ Responde SOLO con la categoría exacta, sin explicación.`;
   }
 }
 
+// ─── Extraer datos de cita del mensaje ───────────────────────────────────────
+async function extraerCitaDeTexto(texto) {
+  const hoy = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Santiago' });
+  const prompt = `Hoy es ${hoy} en Chile. Extrae los datos de la cita del siguiente mensaje.
+Responde SOLO con JSON válido sin markdown:
+{"fecha":"YYYY-MM-DD o null","hora":"HH:MM o null","servicio":"tipo de servicio o null"}
+Para fechas relativas: "mañana"=+1 día, "próximo lunes"=el lunes siguiente, etc.
+Mensaje: "${texto}"`;
+  try {
+    const raw = await llamarGroq([{ role: 'user', content: prompt }], 60, 0);
+    return JSON.parse(raw.replace(/```[a-z]*|```/g, '').trim());
+  } catch(_) { return { fecha: null, hora: null, servicio: null }; }
+}
+
 // ─── Detectar intención (híbrido: regex rápido + IA para el resto) ────────────
 async function detectarIntencion(mensaje, historialDB = []) {
   if (/^\d+$/.test(mensaje.trim()))                                                          return 'CONFIRMAR';
@@ -339,6 +354,7 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/catálogo|catalogo|lista.*productos?|productos? disponibles?|qué (tienen|venden|tienen disponible)/i.test(mensaje)) return 'CATALOGO';
   if (/desarrollador|creó|quien.*hizo/i.test(mensaje))                                       return 'DESARROLLADOR';
   if (/estado.*pedido|dónde.*pedido|pedido.*está|cu[aá]ndo.*llega.*pedido|mi pedido|llegó.*pedido|saber.*pedido|seguimiento.*pedido/i.test(mensaje)) return 'ESTADO_PEDIDO';
+  if (/quiero (una cita|agendar|reservar hora|pedir hora)|agendar.*(cita|hora|turno|reuni[oó]n)|reservar.*(cita|hora|turno)|pedir.*(hora|cita|turno)|necesito (una cita|agendar|una hora)|c[uú]ando (tienen|hay).*(hora|cita|disponible)/i.test(mensaje)) return 'AGENDAR_CITA';
   if (/quiero (matricularme|inscribirme|postular|anotarme|reservar mi cupo)|iniciar.*(matrícula|inscripción|postulación)|cómo (me matriculo|me inscribo|postulo|pago la matr[íi]cula)|pagar.*(matr[íi]cula|inscripción|arancel)|reservar cupo/i.test(mensaje)) return 'INICIAR_MATRICULA';
   // Soporte técnico: cliente ya tiene el producto y necesita ayuda para usarlo
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
@@ -438,4 +454,5 @@ module.exports = {
   extraerProductoConIA,
   obtenerNombreAsistente,
   expandirTerminoBusqueda,
+  extraerCitaDeTexto,
 };

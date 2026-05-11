@@ -9,6 +9,7 @@ const { enviarMensaje, enviarMenu, enviarBotonesConfirmar } = require('./whatsap
 const catalogoService = require('./catalogoService');
 const pdfService      = require('./pdfService');
 const pagoService     = require('./pagoService');
+const calendarService = require('./calendarService');
 
 // ─── Notificación al dueño ────────────────────────────────────────────────────
 async function notificarDueno(tipo, telefono, nombre, extra = '', config = null) {
@@ -26,6 +27,7 @@ async function notificarDueno(tipo, telefono, nombre, extra = '', config = null)
     lead_mayorista:     `🛒 *POSIBLE REVENDEDOR/MAYORISTA*\nCliente: ${nombre} (${telefono})\n${extra}`,
     propuesta_comercial:`📢 *PROPUESTA COMERCIAL RECIBIDA*\nDe: ${nombre} (${telefono})\n${extra}`,
     datos_despacho:     `📍 *DATOS DE DESPACHO RECIBIDOS*\nCliente: ${nombre} (${telefono})\n\n${extra}`,
+    cita_agendada:      `📅 *NUEVA CITA AGENDADA*\nCliente: ${nombre} (${telefono})\n${extra}`,
   };
 
   const msg = mensajes[tipo] || `📬 *${tipo.toUpperCase()}*\nCliente: ${nombre} (${telefono})\n${extra}`;
@@ -854,6 +856,47 @@ Explica que el equipo académico se contactará a la brevedad para completar la 
           } else {
             respuesta = `No encontré un pedido registrado a tu nombre 😕 Si ya realizaste una compra, escríbenos el nombre del producto o envíanos el comprobante de pago para ayudarte 📋`;
           }
+        }
+        break;
+      }
+
+      case 'AGENDAR_CITA': {
+        try {
+          const datosExtraidos = await geminiService.extraerCitaDeTexto(texto);
+          if (datosExtraidos.fecha) {
+            // Guardar cita en DB
+            const citaResult = db.prepare(`
+              INSERT INTO citas (tenant_id, telefono, nombre, servicio, fecha, hora)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `).run(tenantId, telefono, nombre, datosExtraidos.servicio || 'Consulta', datosExtraidos.fecha, datosExtraidos.hora || '10:00');
+
+            // Crear evento en Google Calendar si está configurado
+            let googleLink = '';
+            if (calendarService.tieneCalendario(config?.raw || {})) {
+              try {
+                const evento = await calendarService.crearEvento(config.raw, {
+                  resumen: `${datosExtraidos.servicio || 'Cita'} — ${nombre}`,
+                  descripcion: `Cliente WhatsApp: ${telefono}`,
+                  fecha: datosExtraidos.fecha,
+                  hora: datosExtraidos.hora || '10:00',
+                });
+                if (evento.id) {
+                  db.prepare(`UPDATE citas SET google_event_id=? WHERE id=?`).run(evento.id, citaResult.lastInsertRowid);
+                  googleLink = ' (agendado en calendario ✅)';
+                }
+              } catch(e) { console.error('[Cita/GCal]', e.message); }
+            }
+
+            const fechaFormateada = new Date(datosExtraidos.fecha + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+            respuesta = `✅ *¡Cita confirmada!*\n\n📅 ${fechaFormateada}\n⏰ ${datosExtraidos.hora || '10:00'} hrs\n📋 ${datosExtraidos.servicio || 'Consulta'}${googleLink}\n\nTe esperamos, ${nombre}. Si necesitas cambiar la hora avísanos 😊`;
+
+            await notificarDueno('cita_agendada', telefono, nombre, `📅 ${fechaFormateada} · ${datosExtraidos.hora || '10:00'} · ${datosExtraidos.servicio || 'Consulta'}`, config);
+          } else {
+            respuesta = `Para agendar tu cita, por favor dime:\n📅 ¿Qué día prefieres?\n⏰ ¿A qué hora?\n\nPor ejemplo: _"quiero el martes 20 a las 15:00"_`;
+          }
+        } catch(e) {
+          console.error('[AGENDAR_CITA]', e.message);
+          respuesta = `Para agendar una cita escríbenos indicando el día y la hora que prefieres 😊`;
         }
         break;
       }

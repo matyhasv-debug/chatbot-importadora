@@ -9,6 +9,7 @@ const bcrypt     = require('bcryptjs');
 const { invalidarCacheByTenantId } = require('../services/tenantService');
 const { MENSAJES_DEFAULT }          = require('../services/followUpService');
 const pdfService  = require('../services/pdfService');
+const calendarService = require('../services/calendarService');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
@@ -692,7 +693,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
@@ -703,7 +704,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo'];
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo','google_client_id','google_client_secret','google_calendar_id'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
@@ -976,6 +977,97 @@ router.post('/:slug/api/archivar-conversacion', express.json(), (req, res) => {
     .run(archivado ? 1 : 0, telefono, tenant.id);
   emitirEvento('conversacion_archivada', { telefono, archivado: !!archivado });
   res.json({ ok: true });
+});
+
+// ─── API cliente: citas ───────────────────────────────────────────────────────
+router.get('/:slug/api/citas', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { desde, hasta } = req.query;
+  let q = `SELECT * FROM citas WHERE tenant_id=?`;
+  const p = [tenant.id];
+  if (desde) { q += ` AND fecha >= ?`; p.push(desde); }
+  if (hasta) { q += ` AND fecha <= ?`; p.push(hasta); }
+  q += ` ORDER BY fecha ASC, hora ASC LIMIT 100`;
+  res.json({ ok: true, citas: db.prepare(q).all(...p) });
+});
+
+router.post('/:slug/api/citas', express.json(), async (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { telefono, nombre, servicio, fecha, hora, notas } = req.body;
+  if (!fecha) return res.status(400).json({ ok: false, error: 'Falta fecha' });
+  const r = db.prepare(`INSERT INTO citas (tenant_id,telefono,nombre,servicio,fecha,hora,notas) VALUES (?,?,?,?,?,?,?)`)
+    .run(tenant.id, telefono||'', nombre||'', servicio||'Consulta', fecha, hora||'10:00', notas||'');
+  let googleEventId = null;
+  if (calendarService.tieneCalendario(tenant)) {
+    try {
+      const ev = await calendarService.crearEvento(tenant, { resumen: (servicio||'Cita') + ' — ' + (nombre||telefono), descripcion: telefono, fecha, hora: hora||'10:00' });
+      googleEventId = ev.id || null;
+      if (googleEventId) db.prepare(`UPDATE citas SET google_event_id=? WHERE id=?`).run(googleEventId, r.lastInsertRowid);
+    } catch(_) {}
+  }
+  res.json({ ok: true, id: r.lastInsertRowid, googleEventId });
+});
+
+router.put('/:slug/api/citas/:id', express.json(), (req, res) => {
+  const { slug, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { estado, notas, hora, servicio } = req.body;
+  const campos = [], vals = [];
+  if (estado   !== undefined) { campos.push('estado=?');   vals.push(estado); }
+  if (notas    !== undefined) { campos.push('notas=?');    vals.push(notas); }
+  if (hora     !== undefined) { campos.push('hora=?');     vals.push(hora); }
+  if (servicio !== undefined) { campos.push('servicio=?'); vals.push(servicio); }
+  if (!campos.length) return res.status(400).json({ ok: false });
+  vals.push(id, tenant.id);
+  db.prepare(`UPDATE citas SET ${campos.join(',')} WHERE id=? AND tenant_id=?`).run(...vals);
+  res.json({ ok: true });
+});
+
+router.delete('/:slug/api/citas/:id', (req, res) => {
+  const { slug, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM citas WHERE id=? AND tenant_id=?`).run(id, tenant.id);
+  res.json({ ok: true });
+});
+
+// ─── API cliente: Google Calendar OAuth ──────────────────────────────────────
+router.get('/:slug/api/google-auth', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  if (!tenant.google_client_id || !tenant.google_client_secret)
+    return res.status(400).json({ ok: false, error: 'Configura primero Client ID y Client Secret' });
+  const url = calendarService.getAuthUrl(tenant);
+  res.json({ ok: true, url });
+});
+
+router.get('/:slug/api/google-callback', async (req, res) => {
+  const { slug } = req.params;
+  const { code, error } = req.query;
+  if (error) return res.send(`<h2>❌ Error: ${error}</h2>`);
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).send('Tenant no encontrado');
+  try {
+    const tokens = await calendarService.intercambiarCodigo(tenant, code);
+    if (tokens.refresh_token) {
+      db.prepare(`UPDATE tenants SET google_refresh_token=? WHERE id=?`).run(tokens.refresh_token, tenant.id);
+      invalidarCacheByTenantId(tenant.id);
+    }
+    res.send(`<h2>✅ Google Calendar conectado correctamente</h2><p>Puedes cerrar esta ventana.</p><script>window.close()</script>`);
+  } catch(err) {
+    res.send(`<h2>❌ Error al conectar: ${err.message}</h2>`);
+  }
 });
 
 // ─── API cliente: campañas broadcast ─────────────────────────────────────────

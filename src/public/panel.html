@@ -260,6 +260,19 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
 
+    <!-- Google Calendar -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">📅 Google Calendar (citas)</div>
+      <div id="cfg-google-status" style="font-size:12px;color:var(--muted);margin-bottom:10px">Cargando...</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="cfg-google-client-id" type="text" placeholder="Client ID de Google" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg);font-family:'JetBrains Mono',monospace">
+        <input id="cfg-google-client-secret" type="password" placeholder="Client Secret de Google" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg);font-family:'JetBrains Mono',monospace">
+        <input id="cfg-google-calendar-id" type="text" placeholder="Calendar ID (deja vacío para 'primary')" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg);font-family:'JetBrains Mono',monospace">
+        <button onclick="conectarGoogleCalendar()" style="padding:9px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2);font-family:'Plus Jakarta Sans',sans-serif">🔗 Conectar con Google</button>
+        <p style="font-size:11px;color:var(--muted)">Crea un proyecto en <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent)">Google Cloud Console</a>, activa la Calendar API y crea credenciales OAuth2 de tipo "Aplicación web".</p>
+      </div>
+    </div>
+
     <!-- Branding white-label -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎨 Personalización del panel</div>
@@ -325,6 +338,7 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
   <div class="nav-item active" onclick="switchTab('chat',this)">💬 Conversaciones</div>
   <div class="nav-item" onclick="switchTab('metrics',this)">📊 Métricas</div>
   <div class="nav-item" onclick="switchTab('campanas',this)">📢 Campañas</div>
+  <div class="nav-item" onclick="switchTab('citas',this)">📅 Citas</div>
   <div class="nav-item" onclick="switchTab('catalogo',this)">📦 Catálogo</div>
   <div class="nav-item" onclick="switchTab('followups',this)">⏰ Follow-ups <span id="fu-badge" style="display:none;background:var(--amber);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;margin-left:4px;font-weight:700"></span></div>
 </nav>
@@ -435,6 +449,13 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       <div class="empty"><div class="empty-icon">⏰</div><p>Cargando follow-ups...</p></div>
     </div>
   </div>
+  <!-- CITAS -->
+  <div class="view" id="view-citas">
+    <div class="metrics-wrap" id="citas-content">
+      <div class="empty"><div class="empty-icon">📅</div><p>Cargando citas...</p></div>
+    </div>
+  </div>
+
   <!-- CAMPANAS -->
   <div class="view" id="view-campanas">
     <div class="metrics-wrap" id="campanas-content">
@@ -557,6 +578,7 @@ function switchTab(tab, btn) {
   if (tab === 'followups') cargarFollowUps();
   if (tab === 'catalogo') cargarCatalogo();
   if (tab === 'campanas') cargarCampanas();
+  if (tab === 'citas') cargarCitas();
 }
 
 function setFiltro(estado, btn) {
@@ -1500,6 +1522,17 @@ async function abrirConfigPanel() {
         document.getElementById('cfg-panel-titulo').value = data.panel_titulo || '';
         document.getElementById('cfg-panel-logo').value   = data.panel_logo_url || '';
         document.getElementById('cfg-panel-color').value  = data.panel_color   || '#1D4ED8';
+        document.getElementById('cfg-google-client-id').value     = data.google_client_id || '';
+        document.getElementById('cfg-google-client-secret').value = '';
+        document.getElementById('cfg-google-calendar-id').value   = data.google_calendar_id === 'primary' ? '' : (data.google_calendar_id || '');
+        const gStatus = document.getElementById('cfg-google-status');
+        if (data.google_conectado) {
+          gStatus.textContent = '✅ Google Calendar conectado';
+          gStatus.style.color = 'var(--green)';
+        } else {
+          gStatus.textContent = 'Sin conectar. Guarda primero las credenciales y luego haz clic en "Conectar con Google".';
+          gStatus.style.color = 'var(--muted)';
+        }
       }
       cargarUsuarios();
       cargarInfoPDF();
@@ -1578,6 +1611,184 @@ async function eliminarPDF() {
     toast('🗑️ PDF eliminado', 'var(--text)');
     cargarInfoPDF();
   } catch (_) {}
+}
+
+// ─── Citas / Google Calendar ──────────────────────────────────────────────────
+const CITA_ESTADOS = {
+  confirmada: { l: 'Confirmada', c: 'var(--green)',  bg: 'var(--green-light)'  },
+  pendiente:  { l: 'Pendiente',  c: 'var(--amber)',  bg: 'var(--amber-light)'  },
+  cancelada:  { l: 'Cancelada',  c: 'var(--red)',    bg: 'var(--red-light)'    },
+  completada: { l: 'Completada', c: 'var(--muted)',  bg: 'var(--surf2)'        },
+};
+
+function fmtFechaCita(iso) {
+  if (!iso) return '—';
+  return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+async function cargarCitas() {
+  if (!ES_CLIENTE) { $('citas-content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>Solo disponible en panel de cliente</p></div>'; return; }
+  // Rango: desde hoy -7 días hasta +30 días
+  const desde = new Date(Date.now() - 7*86400000).toISOString().split('T')[0];
+  const hasta = new Date(Date.now() + 30*86400000).toISOString().split('T')[0];
+  try {
+    const d = await fetch(apiURL('/citas') + `&desde=${desde}&hasta=${hasta}`, { headers: getHeaders() }).then(r => r.json());
+    const citas = d.citas || [];
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const proximas = citas.filter(c => c.fecha >= hoy && c.estado !== 'cancelada');
+    const pasadas  = citas.filter(c => c.fecha < hoy || c.estado === 'cancelada');
+
+    $('citas-content').innerHTML = `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div>
+            <div class="section-title">Agenda de citas</div>
+            <p style="font-size:12px;color:var(--muted);margin-top:2px">El bot agenda citas automáticamente por WhatsApp. También puedes crearlas manualmente.</p>
+          </div>
+          <button onclick="abrirModalCita()" style="padding:9px 16px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">+ Nueva cita</button>
+        </div>
+
+        ${proximas.length ? `
+        <div class="section-title">Próximas (${proximas.length})</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+          ${proximas.map(c => citaCardHTML(c)).join('')}
+        </div>` : '<div class="empty" style="padding:32px 0"><div class="empty-icon">📅</div><p>Sin citas próximas</p></div>'}
+
+        ${pasadas.length ? `
+        <details style="margin-top:8px">
+          <summary style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer;margin-bottom:10px">Pasadas (${pasadas.length})</summary>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+            ${pasadas.map(c => citaCardHTML(c, true)).join('')}
+          </div>
+        </details>` : ''}
+      </div>
+
+      <!-- Modal nueva cita -->
+      <div id="modal-cita" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+        <div style="background:var(--surf);border-radius:16px;padding:28px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 style="margin:0;font-size:16px">📅 Nueva cita</h3>
+            <button onclick="cerrarModal('modal-cita')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <input id="cita-nombre" type="text" placeholder="Nombre del cliente" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+            <input id="cita-telefono" type="text" placeholder="Teléfono (opcional)" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'JetBrains Mono',monospace">
+            <input id="cita-servicio" type="text" placeholder="Servicio o motivo" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Fecha</label>
+                <input id="cita-fecha" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Hora</label>
+                <input id="cita-hora" type="time" value="10:00" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+              </div>
+            </div>
+            <textarea id="cita-notas" placeholder="Notas adicionales (opcional)" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif;resize:vertical;min-height:52px"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:18px">
+            <button onclick="cerrarModal('modal-cita')" style="flex:1;padding:11px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Cancelar</button>
+            <button onclick="crearCita()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Guardar cita</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch(_) { $('citas-content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Error cargando citas</p></div>'; }
+}
+
+function citaCardHTML(c, opaca = false) {
+  const st = CITA_ESTADOS[c.estado] || CITA_ESTADOS.pendiente;
+  const gcal = c.google_event_id ? '<span title="En Google Calendar" style="font-size:11px">📆</span>' : '';
+  return `<div class="card" style="${opaca ? 'opacity:.65' : ''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:14px;font-weight:700">${esc(c.nombre || 'Sin nombre')}</span>
+          ${gcal}
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${st.bg};color:${st.c}">${st.l}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:3px">📋 ${esc(c.servicio || 'Consulta')}</div>
+        <div style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace">📅 ${fmtFechaCita(c.fecha)} · ⏰ ${c.hora || '—'}</div>
+        ${c.telefono ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">📱 ${esc(c.telefono)}</div>` : ''}
+        ${c.notas ? `<div style="font-size:11px;color:var(--text2);margin-top:4px;font-style:italic">${esc(c.notas)}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        ${c.estado !== 'completada' && c.estado !== 'cancelada' ? `
+          <button onclick="cambiarEstadoCita(${c.id},'completada')" style="padding:4px 10px;background:var(--green-light);color:var(--green);border:1px solid #A7F3D0;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">✓ Completar</button>
+          <button onclick="cambiarEstadoCita(${c.id},'cancelada')" style="padding:4px 10px;background:var(--red-light);color:var(--red);border:1px solid #FECACA;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">✕ Cancelar</button>
+        ` : `
+          <button onclick="eliminarCita(${c.id})" style="padding:4px 10px;background:var(--surf2);color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">🗑</button>
+        `}
+      </div>
+    </div>
+  </div>`;
+}
+
+function abrirModalCita() {
+  $('cita-nombre').value = ''; $('cita-telefono').value = ''; $('cita-servicio').value = '';
+  $('cita-notas').value = '';
+  $('cita-fecha').value = new Date().toISOString().split('T')[0];
+  $('cita-hora').value = '10:00';
+  $('modal-cita').style.display = 'flex';
+}
+
+async function crearCita() {
+  const fecha = $('cita-fecha')?.value;
+  if (!fecha) { toast('Selecciona una fecha', 'var(--amber)'); return; }
+  const body = {
+    nombre:   $('cita-nombre')?.value.trim(),
+    telefono: $('cita-telefono')?.value.trim(),
+    servicio: $('cita-servicio')?.value.trim() || 'Consulta',
+    fecha,
+    hora:     $('cita-hora')?.value || '10:00',
+    notas:    $('cita-notas')?.value.trim(),
+  };
+  try {
+    const d = await fetch(apiURL('/citas'), { method:'POST', headers: getHeaders(), body: JSON.stringify(body) }).then(r=>r.json());
+    if (d.ok) {
+      cerrarModal('modal-cita');
+      const msg = d.googleEventId ? '✅ Cita guardada y agregada al calendario' : '✅ Cita guardada';
+      toast(msg, 'var(--green)');
+      cargarCitas();
+    } else toast('❌ ' + (d.error||'Error'), 'var(--red)');
+  } catch(_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function cambiarEstadoCita(id, estado) {
+  try {
+    await fetch(apiURL('/citas/' + id), { method:'PUT', headers: getHeaders(), body: JSON.stringify({ estado }) });
+    cargarCitas();
+  } catch(_) {}
+}
+
+async function eliminarCita(id) {
+  if (!confirm('¿Eliminar esta cita?')) return;
+  try {
+    await fetch(apiURL('/citas/' + id), { method:'DELETE', headers: getHeaders() });
+    toast('🗑️ Cita eliminada'); cargarCitas();
+  } catch(_) {}
+}
+
+async function conectarGoogleCalendar() {
+  if (!ES_CLIENTE) return;
+  // Primero guardar las credenciales
+  const body = {
+    google_client_id:     $('cfg-google-client-id')?.value.trim() || '',
+    google_client_secret: $('cfg-google-client-secret')?.value.trim() || '',
+    google_calendar_id:   $('cfg-google-calendar-id')?.value.trim() || 'primary',
+  };
+  if (!body.google_client_id || !body.google_client_secret) {
+    toast('Completa primero el Client ID y Client Secret', 'var(--amber)'); return;
+  }
+  try {
+    await fetch(apiURL('/tenant-config'), { method:'PUT', headers: getHeaders(), body: JSON.stringify(body) });
+    const d = await fetch(apiURL('/google-auth'), { headers: getHeaders() }).then(r=>r.json());
+    if (d.ok && d.url) {
+      window.open(d.url, '_blank', 'width=600,height=700');
+      toast('🔗 Ventana de autorización abierta', 'var(--accent)');
+    } else toast('❌ ' + (d.error||'Error al obtener URL'), 'var(--red)');
+  } catch(_) { toast('❌ Error de conexión', 'var(--red)'); }
 }
 
 // ─── White-label: aplicar branding del tenant ─────────────────────────────────
@@ -1843,6 +2054,9 @@ async function guardarConfigPanel() {
     panel_titulo:                   document.getElementById('cfg-panel-titulo')?.value.trim() || '',
     panel_logo_url:                 document.getElementById('cfg-panel-logo')?.value.trim() || '',
     panel_color:                    document.getElementById('cfg-panel-color')?.value || '#1D4ED8',
+    google_client_id:               document.getElementById('cfg-google-client-id')?.value.trim() || '',
+    google_client_secret:           document.getElementById('cfg-google-client-secret')?.value.trim() || '',
+    google_calendar_id:             document.getElementById('cfg-google-calendar-id')?.value.trim() || 'primary',
   };
   const msg = document.getElementById('cfg-msg');
   try {
