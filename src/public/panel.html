@@ -260,6 +260,22 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
 
+    <!-- Branding white-label -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎨 Personalización del panel</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted)">Nombre del panel</label>
+        <input id="cfg-panel-titulo" type="text" placeholder="Mi Empresa — Panel" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <label style="font-size:12px;font-weight:600;color:var(--muted)">URL del logo (https://...)</label>
+        <input id="cfg-panel-logo" type="url" placeholder="https://miempresa.com/logo.png" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <label style="font-size:12px;font-weight:600;color:var(--muted)">Color principal</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="cfg-panel-color" type="color" value="#1D4ED8" style="width:44px;height:36px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;cursor:pointer;background:var(--bg)">
+          <span style="font-size:12px;color:var(--text2)">Color del panel (botones, acentos)</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Catálogo PDF -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">📄 Catálogo en PDF</div>
@@ -308,6 +324,7 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
 <nav class="nav">
   <div class="nav-item active" onclick="switchTab('chat',this)">💬 Conversaciones</div>
   <div class="nav-item" onclick="switchTab('metrics',this)">📊 Métricas</div>
+  <div class="nav-item" onclick="switchTab('campanas',this)">📢 Campañas</div>
   <div class="nav-item" onclick="switchTab('catalogo',this)">📦 Catálogo</div>
   <div class="nav-item" onclick="switchTab('followups',this)">⏰ Follow-ups <span id="fu-badge" style="display:none;background:var(--amber);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;margin-left:4px;font-weight:700"></span></div>
 </nav>
@@ -418,6 +435,13 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       <div class="empty"><div class="empty-icon">⏰</div><p>Cargando follow-ups...</p></div>
     </div>
   </div>
+  <!-- CAMPANAS -->
+  <div class="view" id="view-campanas">
+    <div class="metrics-wrap" id="campanas-content">
+      <div class="empty"><div class="empty-icon">📢</div><p>Cargando campañas...</p></div>
+    </div>
+  </div>
+
  <div class="view" id="view-catalogo">
     <div class="metrics-wrap" id="catalogo-content">
       <div class="empty"><div class="empty-icon">📦</div><p>Cargando catálogo...</p></div>
@@ -532,6 +556,7 @@ function switchTab(tab, btn) {
   if (tab === 'metrics') cargarMetricas();
   if (tab === 'followups') cargarFollowUps();
   if (tab === 'catalogo') cargarCatalogo();
+  if (tab === 'campanas') cargarCampanas();
 }
 
 function setFiltro(estado, btn) {
@@ -594,6 +619,8 @@ async function cargarContactos() {
   } catch (_) {}
 }
 
+let _brandingAplicado = false;
+
 async function cargarStats() {
   try {
     const data = await fetch(apiURL('/stats'), { headers: getHeaders() }).then(r => r.json());
@@ -601,7 +628,7 @@ async function cargarStats() {
     const s = data.stats;
     if (ES_CLIENTE && s.empresa) {
       $('empresa-badge').textContent = s.empresa;
-      document.title = s.empresa + ' — BotPanel';
+      if (!_brandingAplicado) document.title = s.empresa + ' — BotPanel';
       const ini = s.empresa.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
       $('avatar-initials').textContent = ini;
     }
@@ -609,6 +636,17 @@ async function cargarStats() {
     $('top-pend').textContent = (s.porEstado?.pago_pendiente || 0) + ' pendientes';
     $('top-pag').textContent = (s.porEstado?.pagado || 0) + ' pagados';
   } catch (_) {}
+}
+
+async function cargarBranding() {
+  if (!ES_CLIENTE || _brandingAplicado) return;
+  try {
+    const d = await fetch(apiURL('/tenant-info'), { headers: getHeaders() }).then(r => r.json());
+    if (d.ok && (d.panel_color || d.panel_logo_url || d.panel_titulo)) {
+      aplicarBranding(d);
+      _brandingAplicado = true;
+    }
+  } catch(_) {}
 }
 
 // Fecha del último mensaje renderizado — para separadores de fecha en appendMensaje
@@ -1215,13 +1253,14 @@ function filtrarMensajesChat(q) {
 }
 
 (async () => {
-  await Promise.all([cargarStats(), cargarContactos(), cargarMensajes(null)]);
+  await Promise.all([cargarStats(), cargarContactos(), cargarMensajes(null), cargarBranding()]);
   conectarSSE();
   setInterval(cargarStats, 30000);
   setInterval(cargarContactos, 15000);
   if (ES_CLIENTE) setInterval(() => polearMensajes(telefonoActivo), 10000);
   setInterval(() => { if (tabActual === 'followups') cargarFollowUps(); }, 60000);
   setInterval(() => { if (tabActual === 'catalogo') cargarCatalogo(); }, 60000);
+  setInterval(() => { if (tabActual === 'campanas') cargarCampanas(); }, 8000);
   })();
   async function cargarCatalogo() {
   const [embRes, prodRes] = await Promise.all([
@@ -1458,6 +1497,9 @@ async function abrirConfigPanel() {
           document.getElementById('cfg-pasarela-key').value = data.pasarela_api_key || '';
           togglePasarela();
         }
+        document.getElementById('cfg-panel-titulo').value = data.panel_titulo || '';
+        document.getElementById('cfg-panel-logo').value   = data.panel_logo_url || '';
+        document.getElementById('cfg-panel-color').value  = data.panel_color   || '#1D4ED8';
       }
       cargarUsuarios();
       cargarInfoPDF();
@@ -1536,6 +1578,180 @@ async function eliminarPDF() {
     toast('🗑️ PDF eliminado', 'var(--text)');
     cargarInfoPDF();
   } catch (_) {}
+}
+
+// ─── White-label: aplicar branding del tenant ─────────────────────────────────
+function aplicarBranding(data) {
+  if (!ES_CLIENTE) return;
+  if (data.panel_color && data.panel_color !== '#1D4ED8') {
+    document.documentElement.style.setProperty('--accent', data.panel_color);
+    // Derivar accent-light del color principal
+    document.documentElement.style.setProperty('--accent-light', data.panel_color + '18');
+  }
+  if (data.panel_titulo) {
+    document.querySelector('.logo-name').innerHTML = data.panel_titulo;
+    document.title = data.panel_titulo;
+  }
+  if (data.panel_logo_url) {
+    const icon = document.querySelector('.logo-icon');
+    if (icon) {
+      icon.style.background = 'transparent';
+      icon.innerHTML = `<img src="${esc(data.panel_logo_url)}" style="width:28px;height:28px;object-fit:contain;border-radius:6px" onerror="this.style.display='none'">`;
+    }
+  }
+}
+
+// ─── Campañas broadcast ───────────────────────────────────────────────────────
+const CAMP_ESTADOS = {
+  borrador:   { l: 'Borrador',    c: 'var(--muted)',   bg: 'var(--surf2)'         },
+  enviando:   { l: 'Enviando...', c: 'var(--amber)',   bg: 'var(--amber-light)'   },
+  completada: { l: 'Completada',  c: 'var(--green)',   bg: 'var(--green-light)'   },
+  cancelada:  { l: 'Cancelada',   c: 'var(--red)',     bg: 'var(--red-light)'     },
+};
+
+async function cargarCampanas() {
+  if (!ES_CLIENTE) { $('campanas-content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>Solo disponible en panel de cliente</p></div>'; return; }
+  try {
+    const d = await fetch(apiURL('/campanas'), { headers: getHeaders() }).then(r => r.json());
+    const cs = d.campanas || [];
+    $('campanas-content').innerHTML = `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div>
+            <div class="section-title">Campañas de WhatsApp</div>
+            <p style="font-size:12px;color:var(--muted);margin-top:2px">Envía mensajes masivos a segmentos de clientes. Usa <code style="background:var(--surf2);padding:1px 5px;border-radius:4px">{{nombre}}</code> para personalizar.</p>
+          </div>
+          <button onclick="abrirModalCampana()" style="padding:9px 16px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap">+ Nueva campaña</button>
+        </div>
+        ${cs.length ? `<div style="display:flex;flex-direction:column;gap:10px">
+          ${cs.map(c => {
+            const st = CAMP_ESTADOS[c.estado] || CAMP_ESTADOS.borrador;
+            const pct = c.total > 0 ? Math.round(c.enviadas / c.total * 100) : 0;
+            const filtroDesc = [c.filtro_estado ? '📋 Estado: ' + c.filtro_estado : '', c.filtro_tag ? '🏷 Tag: ' + c.filtro_tag : ''].filter(Boolean).join(' · ') || '👥 Todos los clientes';
+            return `<div class="card" style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14px;font-weight:700;margin-bottom:3px">${esc(c.nombre)}</div>
+                  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${filtroDesc}</div>
+                  <div style="font-size:12px;color:var(--text2);background:var(--surf2);border-radius:6px;padding:7px 10px;font-family:'JetBrains Mono',monospace;line-height:1.5;max-height:56px;overflow:hidden">${esc(c.mensaje.slice(0,140))}${c.mensaje.length>140?'…':''}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+                  <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${st.bg};color:${st.c}">${st.l}</span>
+                  ${c.estado === 'completada' ? `<span style="font-size:11px;color:var(--green);font-weight:600">${c.enviadas}/${c.total} ✅</span>` : ''}
+                  ${c.errores > 0 ? `<span style="font-size:11px;color:var(--red)">${c.errores} errores</span>` : ''}
+                </div>
+              </div>
+              ${c.estado === 'completada' && c.total > 0 ? `<div style="background:var(--surf2);border-radius:20px;height:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--green);border-radius:20px"></div></div>` : ''}
+              <div style="display:flex;gap:8px;justify-content:flex-end">
+                ${c.estado === 'borrador' ? `<button onclick="enviarCampana(${c.id},'${esc(c.nombre)}')" style="padding:7px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">📤 Enviar ahora</button>` : ''}
+                ${c.estado !== 'enviando' ? `<button onclick="eliminarCampana(${c.id})" style="padding:7px 12px;background:var(--red-light);color:var(--red);border:1px solid #FECACA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">🗑</button>` : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>` : '<div class="empty" style="padding:40px 0"><div class="empty-icon">📢</div><p>Sin campañas. Crea la primera.</p></div>'}
+      </div>
+
+      <!-- Modal nueva campaña -->
+      <div id="modal-campana" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+        <div style="background:var(--surf);border-radius:16px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 style="margin:0;font-size:16px">📢 Nueva campaña</h3>
+            <button onclick="cerrarModal('modal-campana')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Nombre de la campaña</label>
+              <input id="camp-nombre" type="text" placeholder="ej: Promo mayo, Clientes VIP" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Mensaje</label>
+              <textarea id="camp-mensaje" placeholder="Hola {{nombre}}, tenemos una oferta especial para ti..." style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);resize:vertical;font-family:'Plus Jakarta Sans',sans-serif;line-height:1.5"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por estado</label>
+                <select id="camp-filtro-estado" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+                  <option value="">Todos los estados</option>
+                  <option value="en_conversacion">💬 En conversación</option>
+                  <option value="consultando">🔍 Consultando</option>
+                  <option value="cotizado">📋 Cotizado</option>
+                  <option value="pago_pendiente">⏳ Pago pendiente</option>
+                  <option value="pagado">✅ Pagado</option>
+                  <option value="despachado">🚚 Despachado</option>
+                  <option value="abandono">👻 Abandono</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Filtrar por etiqueta</label>
+                <input id="camp-filtro-tag" type="text" placeholder="ej: VIP, mayorista" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif">
+              </div>
+            </div>
+            <div style="background:var(--surf2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:var(--text2)" id="camp-preview-txt">Haz clic en "Ver destinatarios" para contar</span>
+              <button onclick="previewCampana()" style="padding:6px 12px;background:var(--surf);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap">Ver destinatarios</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:20px">
+            <button onclick="cerrarModal('modal-campana')" style="flex:1;padding:11px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Cancelar</button>
+            <button onclick="crearCampana()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">Guardar campaña</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch(_) { $('campanas-content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Error cargando campañas</p></div>'; }
+}
+
+function abrirModalCampana() {
+  $('camp-nombre').value = ''; $('camp-mensaje').value = '';
+  $('camp-filtro-estado').value = ''; $('camp-filtro-tag').value = '';
+  $('camp-preview-txt').textContent = 'Haz clic en "Ver destinatarios" para contar';
+  $('modal-campana').style.display = 'flex';
+}
+
+async function previewCampana() {
+  const estado = $('camp-filtro-estado')?.value || '';
+  const tag    = $('camp-filtro-tag')?.value.trim() || '';
+  const qs = [estado ? 'filtro_estado='+encodeURIComponent(estado) : '', tag ? 'filtro_tag='+encodeURIComponent(tag) : ''].filter(Boolean).join('&');
+  try {
+    const d = await fetch(apiURL('/campanas/preview') + (qs ? '&' + qs : ''), { headers: getHeaders() }).then(r => r.json());
+    const el = $('camp-preview-txt');
+    if (d.ok) el.textContent = `👥 ${d.total} destinatario${d.total !== 1 ? 's' : ''} recibirán esta campaña`;
+    else el.textContent = '❌ Error al calcular';
+  } catch(_) { $('camp-preview-txt').textContent = '❌ Error de conexión'; }
+}
+
+async function crearCampana() {
+  const nombre  = $('camp-nombre')?.value.trim();
+  const mensaje = $('camp-mensaje')?.value.trim();
+  if (!nombre || !mensaje) { toast('Completa nombre y mensaje', 'var(--amber)'); return; }
+  const body = {
+    nombre, mensaje,
+    filtro_estado: $('camp-filtro-estado')?.value || null,
+    filtro_tag:    $('camp-filtro-tag')?.value.trim() || null,
+  };
+  try {
+    const d = await fetch(apiURL('/campanas'), { method:'POST', headers: getHeaders(), body: JSON.stringify(body) }).then(r=>r.json());
+    if (d.ok) { cerrarModal('modal-campana'); toast('✅ Campaña guardada', 'var(--green)'); cargarCampanas(); }
+    else toast('❌ ' + (d.error||'Error'), 'var(--red)');
+  } catch(_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function enviarCampana(id, nombre) {
+  if (!confirm(`¿Enviar la campaña "${nombre}" ahora?\n\nSe enviarán mensajes a todos los destinatarios que cumplan el filtro.`)) return;
+  try {
+    const d = await fetch(apiURL('/campanas/' + id + '/enviar'), { method:'POST', headers: getHeaders() }).then(r=>r.json());
+    if (d.ok) { toast(`📤 Enviando a ${d.total} destinatario${d.total!==1?'s':''}...`, 'var(--green)'); setTimeout(cargarCampanas, 2000); }
+    else toast('❌ ' + (d.error||'Error'), 'var(--red)');
+  } catch(_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function eliminarCampana(id) {
+  if (!confirm('¿Eliminar esta campaña?')) return;
+  try {
+    const d = await fetch(apiURL('/campanas/' + id), { method:'DELETE', headers: getHeaders() }).then(r=>r.json());
+    if (d.ok) { toast('🗑️ Campaña eliminada'); cargarCampanas(); }
+    else toast('❌ ' + (d.error||'Error'), 'var(--red)');
+  } catch(_) {}
 }
 
 // ─── CRM ──────────────────────────────────────────────────────────────────────
@@ -1624,6 +1840,9 @@ async function guardarConfigPanel() {
     pasarela_tipo:                  document.getElementById('cfg-pasarela')?.value || 'ninguna',
     pasarela_api_key:               document.getElementById('cfg-pasarela-key')?.value.trim() || '',
     pasarela_api_secret:            document.getElementById('cfg-pasarela-secret')?.value.trim() || '',
+    panel_titulo:                   document.getElementById('cfg-panel-titulo')?.value.trim() || '',
+    panel_logo_url:                 document.getElementById('cfg-panel-logo')?.value.trim() || '',
+    panel_color:                    document.getElementById('cfg-panel-color')?.value || '#1D4ED8',
   };
   const msg = document.getElementById('cfg-msg');
   try {

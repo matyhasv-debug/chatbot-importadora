@@ -692,7 +692,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
@@ -703,7 +703,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf'];
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
@@ -976,6 +976,102 @@ router.post('/:slug/api/archivar-conversacion', express.json(), (req, res) => {
     .run(archivado ? 1 : 0, telefono, tenant.id);
   emitirEvento('conversacion_archivada', { telefono, archivado: !!archivado });
   res.json({ ok: true });
+});
+
+// ─── API cliente: campañas broadcast ─────────────────────────────────────────
+router.get('/:slug/api/campanas', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const campanas = db.prepare(`SELECT * FROM campanas WHERE tenant_id=? ORDER BY creado_en DESC LIMIT 50`).all(tenant.id);
+  res.json({ ok: true, campanas });
+});
+
+router.get('/:slug/api/campanas/preview', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { filtro_estado, filtro_tag } = req.query;
+
+  let query = `SELECT COUNT(DISTINCT c.telefono) as n FROM clientes c WHERE c.tenant_id=? AND COALESCE(c.archivado,0)=0`;
+  const params = [tenant.id];
+  if (filtro_estado) { query += ` AND COALESCE(c.estado,'en_conversacion')=?`; params.push(filtro_estado); }
+  if (filtro_tag)    { query += ` AND EXISTS(SELECT 1 FROM cliente_tags WHERE tenant_id=? AND telefono=c.telefono AND tag=?)`; params.push(tenant.id, filtro_tag); }
+
+  try {
+    const n = db.prepare(query).get(...params)?.n || 0;
+    res.json({ ok: true, total: n });
+  } catch(err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/:slug/api/campanas', express.json(), (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { nombre, mensaje, filtro_estado, filtro_tag } = req.body;
+  if (!nombre?.trim() || !mensaje?.trim()) return res.status(400).json({ ok: false, error: 'Faltan nombre y mensaje' });
+  const r = db.prepare(`INSERT INTO campanas (tenant_id,nombre,mensaje,filtro_estado,filtro_tag) VALUES (?,?,?,?,?)`)
+    .run(tenant.id, nombre.trim(), mensaje.trim(), filtro_estado||null, filtro_tag||null);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+router.delete('/:slug/api/campanas/:id', (req, res) => {
+  const { slug, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const c = db.prepare(`SELECT estado FROM campanas WHERE id=? AND tenant_id=?`).get(id, tenant.id);
+  if (!c) return res.status(404).json({ ok: false });
+  if (c.estado === 'enviando') return res.status(409).json({ ok: false, error: 'No se puede eliminar mientras se envía' });
+  db.prepare(`DELETE FROM campanas WHERE id=? AND tenant_id=?`).run(id, tenant.id);
+  res.json({ ok: true });
+});
+
+router.post('/:slug/api/campanas/:id/enviar', express.json(), async (req, res) => {
+  const { slug, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  const campana = db.prepare(`SELECT * FROM campanas WHERE id=? AND tenant_id=?`).get(id, tenant.id);
+  if (!campana) return res.status(404).json({ ok: false, error: 'No encontrada' });
+  if (campana.estado === 'enviando')   return res.status(409).json({ ok: false, error: 'Ya se está enviando' });
+  if (campana.estado === 'completada') return res.status(409).json({ ok: false, error: 'Ya fue enviada' });
+
+  // Construir lista de destinatarios
+  let query = `SELECT DISTINCT c.telefono, c.nombre FROM clientes c WHERE c.tenant_id=? AND COALESCE(c.archivado,0)=0`;
+  const params = [tenant.id];
+  if (campana.filtro_estado) { query += ` AND COALESCE(c.estado,'en_conversacion')=?`; params.push(campana.filtro_estado); }
+  if (campana.filtro_tag)    { query += ` AND EXISTS(SELECT 1 FROM cliente_tags WHERE tenant_id=? AND telefono=c.telefono AND tag=?)`; params.push(tenant.id, campana.filtro_tag); }
+
+  let destinatarios = [];
+  try { destinatarios = db.prepare(query).all(...params); } catch(e) { return res.status(500).json({ ok: false, error: e.message }); }
+  if (!destinatarios.length) return res.status(400).json({ ok: false, error: 'Sin destinatarios con este filtro' });
+
+  db.prepare(`UPDATE campanas SET estado='enviando', total=?, enviado_en=CURRENT_TIMESTAMP WHERE id=?`).run(destinatarios.length, id);
+  res.json({ ok: true, total: destinatarios.length });
+
+  // Enviar en background
+  const phoneId = tenant.whatsapp_phone_id;
+  const tok     = tenant.whatsapp_token;
+  let enviadas = 0, errores = 0;
+  for (const dest of destinatarios) {
+    const body = campana.mensaje.replace(/\{\{nombre\}\}/g, dest.nombre || 'Cliente');
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+        { messaging_product: 'whatsapp', recipient_type: 'individual', to: dest.telefono, type: 'text', text: { preview_url: false, body } },
+        { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
+      );
+      enviadas++;
+    } catch(_) { errores++; }
+    await new Promise(r => setTimeout(r, 200)); // respetar rate limit
+  }
+  db.prepare(`UPDATE campanas SET estado='completada', enviadas=?, errores=? WHERE id=?`).run(enviadas, errores, id);
+  console.log(`[Campaña ${id}] ✅ ${enviadas}/${destinatarios.length} enviados, ${errores} errores`);
 });
 
 // ─── API cliente: CRM — perfil completo ──────────────────────────────────────

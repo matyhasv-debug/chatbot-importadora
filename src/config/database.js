@@ -171,6 +171,24 @@ const migraciones = [
     creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS idx_notas_tel ON cliente_notas(tenant_id, telefono)`,
+  `CREATE TABLE IF NOT EXISTS campanas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+    nombre        TEXT NOT NULL,
+    mensaje       TEXT NOT NULL,
+    filtro_estado TEXT,
+    filtro_tag    TEXT,
+    estado        TEXT DEFAULT 'borrador',
+    total         INTEGER DEFAULT 0,
+    enviadas      INTEGER DEFAULT 0,
+    errores       INTEGER DEFAULT 0,
+    creado_en     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    enviado_en    DATETIME
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_campanas_tenant ON campanas(tenant_id)`,
+  `ALTER TABLE tenants ADD COLUMN panel_logo_url TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN panel_color TEXT DEFAULT '#1D4ED8'`,
+  `ALTER TABLE tenants ADD COLUMN panel_titulo TEXT DEFAULT ''`,
 ];
 
 for (const sql of migraciones) {
