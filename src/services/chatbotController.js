@@ -232,6 +232,8 @@ function detectarDatosDespacho(texto) {
 }
 
 function detectarComprobante(data) {
+  // Documentos enviados mientras el cliente está en etapa de pago = comprobante
+  if (data.tipo === 'document') return true;
   if (data.tipo !== 'image') return false;
   const texto = (data.texto || data.payload || '').toLowerCase();
   return /comprobante|transfer|pag[ué]|recibo|voucher|depósito|deposito/.test(texto);
@@ -312,7 +314,7 @@ async function procesarMensaje(data) {
       } else if (mediaInfo?.tipo === 'audio' || mediaInfo?.tipo === 'voice') {
         await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'document') {
-        await enviarMensaje(telefono, '¡Documento recibido! 📄 Lo revisaremos. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
+        await enviarMensaje(telefono, '¡Comprobante recibido! 🧾 Lo revisaremos y coordinaremos tu pedido a la brevedad. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
       }
       return;
     }
