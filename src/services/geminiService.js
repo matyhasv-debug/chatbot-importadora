@@ -304,6 +304,7 @@ Clasifica el mensaje actual considerando el contexto. Categorías:
 - HORARIO: pregunta por horarios, ubicación o dirección
 - SOPORTE_TECNICO: ya tiene el producto y pregunta cómo usarlo, configurarlo, o pide tutorial/pasos
 - ESTADO_PEDIDO: pregunta por el estado, seguimiento o fecha de llegada de un pedido ya realizado
+- INICIAR_MATRICULA: quiere matricularse, inscribirse, postular o pagar matrícula/arancel
 - SALUDO: saludo sin consulta específica
 - AYUDA: pide ayuda general o menú de opciones
 - CONSULTA_GENERAL: cualquier otra consulta
@@ -338,6 +339,7 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/catálogo|catalogo|lista.*productos?|productos? disponibles?|qué (tienen|venden|tienen disponible)/i.test(mensaje)) return 'CATALOGO';
   if (/desarrollador|creó|quien.*hizo/i.test(mensaje))                                       return 'DESARROLLADOR';
   if (/estado.*pedido|dónde.*pedido|pedido.*está|cu[aá]ndo.*llega.*pedido|mi pedido|llegó.*pedido|saber.*pedido|seguimiento.*pedido/i.test(mensaje)) return 'ESTADO_PEDIDO';
+  if (/quiero (matricularme|inscribirme|postular|anotarme|reservar mi cupo)|iniciar.*(matrícula|inscripción|postulación)|cómo (me matriculo|me inscribo|postulo|pago la matr[íi]cula)|pagar.*(matr[íi]cula|inscripción|arancel)|reservar cupo/i.test(mensaje)) return 'INICIAR_MATRICULA';
   // Soporte técnico: cliente ya tiene el producto y necesita ayuda para usarlo
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
   // Afirmaciones cortas solas: nunca disparar compra, dejar que el contexto las maneje

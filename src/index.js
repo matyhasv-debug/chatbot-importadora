@@ -102,6 +102,7 @@ app.use('/panel/api/login', loginLimiter);
 app.use('/panel',   apiLimiter, panelRouter);
 app.use('/admin',   apiLimiter, adminRouter);
 app.use('/webhook', webhookLimiter, webhookRouter);
+app.use('/pago',    webhookRouter); // /pago/gracias — retorno Flow
 
 // Health check
 app.get('/', (req, res) => {

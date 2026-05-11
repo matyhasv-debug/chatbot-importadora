@@ -148,6 +148,10 @@ const migraciones = [
     UNIQUE(tenant_id, usuario)
   )`,
   `ALTER TABLE clientes ADD COLUMN archivado INTEGER DEFAULT 0`,
+  `ALTER TABLE tenants ADD COLUMN pasarela_tipo TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN pasarela_api_key TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN pasarela_api_secret TEXT DEFAULT ''`,
+  `ALTER TABLE tenants ADD COLUMN modo_catalogo_pdf INTEGER DEFAULT 0`,
 ];
 
 for (const sql of migraciones) {

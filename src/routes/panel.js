@@ -2,11 +2,15 @@
 const express    = require('express');
 const path       = require('path');
 const axios      = require('axios');
+const multer     = require('multer');
 const db         = require('../config/database');
 const jwt        = require('jsonwebtoken');
 const bcrypt     = require('bcryptjs');
 const { invalidarCacheByTenantId } = require('../services/tenantService');
 const { MENSAJES_DEFAULT }          = require('../services/followUpService');
+const pdfService  = require('../services/pdfService');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
   console.error('[Panel] ⚠️  JWT_SECRET no configurado. Define JWT_SECRET en .env para producción.');
   return 'fallback_secret_inseguro';
@@ -379,7 +383,7 @@ router.post('/api/tenants', express.json(), (req, res) => {
       asistentes, pago_banco, pago_tipo, pago_cuenta, pago_titular, pago_rut, pago_email,
       envio_courier, envio_tiempo, envio_quien_paga, mayorista_minimo, garantia_meses, garantia_cond,
       bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key,
-      tipo_negocio, prompt_extra } = req.body;
+      tipo_negocio, prompt_extra, pasarela_tipo, pasarela_api_key, pasarela_api_secret } = req.body;
     if (!slug || !empresa_nombre || !whatsapp_phone_id || !whatsapp_token)
       return res.status(400).json({ ok: false, error: 'Faltan campos obligatorios' });
     const r = db.prepare(`
@@ -387,14 +391,15 @@ router.post('/api/tenants', express.json(), (req, res) => {
         asistentes, pago_banco, pago_tipo, pago_cuenta, pago_titular, pago_rut, pago_email,
         envio_courier, envio_tiempo, envio_quien_paga, mayorista_minimo, garantia_meses, garantia_cond,
         bsale_token, whatsapp_phone_id, whatsapp_token, notif_telefono, modo_catalogo, panel_key,
-        tipo_negocio, prompt_extra)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        tipo_negocio, prompt_extra, pasarela_tipo, pasarela_api_key, pasarela_api_secret)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(slug, empresa_nombre, empresa_dir||'', empresa_web||'', empresa_horario||'', empresa_domingos?1:0,
       JSON.stringify(asistentes||[]), pago_banco||'', pago_tipo||'', pago_cuenta||'', pago_titular||'',
       pago_rut||'', pago_email||'', envio_courier||'', envio_tiempo||'', envio_quien_paga||'cliente',
       mayorista_minimo||3, garantia_meses||6, garantia_cond||'', bsale_token||'',
       whatsapp_phone_id, whatsapp_token, notif_telefono||'', modo_catalogo||'bsale', panel_key||'',
-      tipo_negocio||'tienda', prompt_extra||'');
+      tipo_negocio||'tienda', prompt_extra||'',
+      pasarela_tipo||'', pasarela_api_key||'', pasarela_api_secret||'');
     res.json({ ok: true, tenantId: r.lastInsertRowid });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -667,7 +672,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
@@ -884,6 +889,48 @@ router.post('/:slug/api/followup-manual', express.json(), async (req, res) => {
     programarSeguimiento(telefono, tipo, 0, tenant.id); // delay 0 = enviar en próximo ciclo
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── API cliente: subir catálogo PDF ─────────────────────────────────────────
+router.post('/:slug/api/subir-pdf', upload.single('pdf'), async (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
+  if (!req.file.originalname.toLowerCase().endsWith('.pdf'))
+    return res.status(400).json({ ok: false, error: 'Solo se aceptan archivos PDF' });
+  try {
+    const resultado = await pdfService.procesarPDF(req.file.buffer, tenant.id);
+    db.prepare(`UPDATE tenants SET modo_catalogo_pdf = 1 WHERE id = ?`).run(tenant.id);
+    invalidarCacheByTenantId(tenant.id);
+    res.json({ ok: true, ...resultado });
+  } catch (err) {
+    console.error('[Panel] Error procesando PDF:', err.message);
+    res.status(500).json({ ok: false, error: 'Error procesando el PDF: ' + err.message });
+  }
+});
+
+// ─── API cliente: info del PDF actual ────────────────────────────────────────
+router.get('/:slug/api/pdf-info', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const info = pdfService.infoPDF(tenant.id);
+  res.json({ ok: true, tienePDF: !!info, ...info });
+});
+
+// ─── API cliente: eliminar PDF ────────────────────────────────────────────────
+router.delete('/:slug/api/pdf', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM catalogo_pdf_chunks WHERE tenant_id = ?`).run(tenant.id);
+  db.prepare(`UPDATE tenants SET modo_catalogo_pdf = 0 WHERE id = ?`).run(tenant.id);
+  invalidarCacheByTenantId(tenant.id);
+  res.json({ ok: true });
 });
 
 // ─── API cliente: archivar / restaurar conversación ──────────────────────────

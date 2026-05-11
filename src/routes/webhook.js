@@ -2,9 +2,11 @@
 const express       = require('express');
 const crypto        = require('crypto');
 const router        = express.Router();
-const { parsearWebhook, marcarLeido } = require('../services/whatsappService');
+const { parsearWebhook, marcarLeido, enviarMensaje } = require('../services/whatsappService');
 const { procesarMensaje }             = require('../services/chatbotController');
 const tenantService = require('../services/tenantService');
+const db            = require('../config/database');
+const pagoService   = require('../services/pagoService');
 
 // ─── Verificar firma HMAC-SHA256 de Meta ──────────────────────────────────────
 function verificarFirma(req, res, next) {
@@ -118,6 +120,83 @@ router.post('/', verificarFirma, async (req, res) => {
   } catch (err) {
     console.error('[Webhook] Error procesando mensaje:', err);
   }
+});
+
+// ─── POST: Webhook de confirmación de pago Flow ───────────────────────────────
+router.post('/pago-flow', express.urlencoded({ extended: true }), async (req, res) => {
+  res.sendStatus(200); // Flow requiere 200 inmediato
+
+  const { token } = req.body;
+  if (!token) return;
+
+  try {
+    // Buscar qué pago corresponde a este token
+    const pago = db.prepare(`SELECT * FROM pagos_pendientes WHERE flow_token = ? AND estado = 'pendiente'`).get(token);
+    if (!pago) return console.warn(`[Flow] Token desconocido: ${token}`);
+
+    // Buscar tenant para obtener credenciales de pasarela
+    const tenant = db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(pago.tenant_id);
+    if (!tenant) return;
+
+    // Verificar el pago con la API de Flow
+    const estado = await pagoService.verificarPagoFlow(tenant.pasarela_api_key, tenant.pasarela_api_secret, token);
+    // status 2 = pagado, 3 = rechazado, 4 = anulado
+    if (estado.status !== 2) {
+      console.warn(`[Flow] Pago no confirmado para ${pago.orden_id} — status: ${estado.status}`);
+      return;
+    }
+
+    // Confirmar en BD
+    pagoService.confirmarPago(pago.orden_id);
+
+    const phoneId = tenant.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
+    const tok     = tenant.whatsapp_token    || process.env.WHATSAPP_TOKEN;
+    const nombre  = db.prepare(`SELECT nombre FROM clientes WHERE telefono = ? AND tenant_id = ?`).get(pago.telefono, pago.tenant_id)?.nombre || pago.telefono;
+
+    // Actualizar estado del cliente
+    const { actualizarEstadoCliente } = require('./panel');
+    actualizarEstadoCliente(pago.telefono, 'pagado', pago.tenant_id);
+
+    // Notificar al cliente
+    await enviarMensaje(pago.telefono,
+      `✅ *¡Pago confirmado!*\n\n` +
+      `Tu pago de $${Math.round(pago.monto).toLocaleString('es-CL')} fue recibido correctamente 🎉\n` +
+      `*${pago.descripcion}*\n\n` +
+      `Te contactaremos a la brevedad para coordinar los pasos siguientes. ¡Gracias!`,
+      phoneId, tok
+    );
+
+    // Notificar al dueño
+    const notifTel = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
+    if (notifTel) {
+      await enviarMensaje(notifTel,
+        `💳 *PAGO FLOW CONFIRMADO*\n` +
+        `Cliente: ${nombre} (${pago.telefono})\n` +
+        `Monto: $${Math.round(pago.monto).toLocaleString('es-CL')}\n` +
+        `Orden: ${pago.orden_id}\n` +
+        `Detalle: ${pago.descripcion}`,
+        phoneId, tok
+      );
+    }
+
+    console.log(`[Flow] ✅ Pago confirmado — ${pago.orden_id} | ${pago.telefono} | $${pago.monto}`);
+  } catch (err) {
+    console.error('[Flow] Error procesando webhook:', err.message);
+  }
+});
+
+// ─── GET: Página de retorno tras pago Flow ────────────────────────────────────
+router.get('/gracias', (req, res) => {
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Pago recibido</title>
+    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F0FDF4}
+    .box{text-align:center;padding:40px;background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+    h1{color:#059669;font-size:28px;margin-bottom:8px}p{color:#4B5563;font-size:15px}</style></head>
+    <body><div class="box"><div style="font-size:56px">✅</div>
+    <h1>¡Pago recibido!</h1>
+    <p>Tu pago fue procesado correctamente.<br>Recibirás un mensaje de WhatsApp con la confirmación.</p>
+    <p style="margin-top:20px;color:#9CA3AF;font-size:13px">Puedes cerrar esta ventana.</p>
+    </div></body></html>`);
 });
 
 module.exports = router;

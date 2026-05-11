@@ -270,6 +270,7 @@ tr:hover td{background:var(--surf2)}
         <select id="modo_catalogo">
           <option value="bsale">Bsale (con ERP)</option>
           <option value="manual">Manual (sin ERP)</option>
+          <option value="pdf">PDF (catálogo subido)</option>
         </select>
       </div>
       <div class="field">
@@ -279,6 +280,30 @@ tr:hover td{background:var(--surf2)}
       <div class="field">
         <label>Teléfono del dueño (notificaciones)</label>
         <input id="notif_telefono" placeholder="ej: 56912345678">
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Pasarela de pago -->
+    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">💳 Pasarela de pago en línea (opcional)</div>
+    <div class="grid" style="margin-bottom:20px">
+      <div class="field">
+        <label>Pasarela</label>
+        <select id="pasarela_tipo" onchange="togglePasarela()">
+          <option value="ninguna">Sin pasarela (solo transferencia)</option>
+          <option value="flow">Flow (Chile)</option>
+        </select>
+        <span class="hint">El bot generará links de pago automáticos al confirmar ventas</span>
+      </div>
+      <div class="field" id="field-pasarela-key" style="display:none">
+        <label>API Key</label>
+        <input id="pasarela_api_key" placeholder="Clave API de Flow">
+      </div>
+      <div class="field" id="field-pasarela-secret" style="display:none">
+        <label>API Secret</label>
+        <input id="pasarela_api_secret" type="password" placeholder="Secret de Flow">
+        <span class="hint">Obtenlo en app.flow.cl → Configuración → API</span>
       </div>
     </div>
 
@@ -324,6 +349,13 @@ tr:hover td{background:var(--surf2)}
 
 <script>
 const KEY = new URLSearchParams(location.search).get('key') || '';
+
+function togglePasarela() {
+  const v = document.getElementById('pasarela_tipo').value;
+  const show = v && v !== 'ninguna';
+  document.getElementById('field-pasarela-key').style.display    = show ? '' : 'none';
+  document.getElementById('field-pasarela-secret').style.display = show ? '' : 'none';
+}
 
 function toast(msg, color = '#111827') {
   const t = document.getElementById('toast');
@@ -483,10 +515,13 @@ async function guardarTenant() {
     whatsapp_token:    document.getElementById('whatsapp_token').value.trim(),
     bsale_token:       document.getElementById('bsale_token').value.trim(),
     notif_telefono:    document.getElementById('notif_telefono').value.trim(),
-    modo_catalogo:     document.getElementById('modo_catalogo').value,
-    tipo_negocio:      document.getElementById('tipo_negocio').value,
-    prompt_extra:      document.getElementById('prompt_extra').value.trim(),
-    panel_key:         '',
+    modo_catalogo:       document.getElementById('modo_catalogo').value,
+    tipo_negocio:        document.getElementById('tipo_negocio').value,
+    prompt_extra:        document.getElementById('prompt_extra').value.trim(),
+    pasarela_tipo:       document.getElementById('pasarela_tipo').value,
+    pasarela_api_key:    document.getElementById('pasarela_api_key').value.trim(),
+    pasarela_api_secret: document.getElementById('pasarela_api_secret').value.trim(),
+    panel_key:           '',
   };
 
   // Modo edición: PUT al tenant existente

@@ -7,6 +7,8 @@ const followUpService = require('./followUpService');
 const tenantService   = require('./tenantService');
 const { enviarMensaje, enviarMenu, enviarBotonesConfirmar } = require('./whatsappService');
 const catalogoService = require('./catalogoService');
+const pdfService      = require('./pdfService');
+const pagoService     = require('./pagoService');
 
 // ─── Notificación al dueño ────────────────────────────────────────────────────
 async function notificarDueno(tipo, telefono, nombre, extra = '', config = null) {
@@ -157,6 +159,20 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
     return null;
   }
 
+  // modo === 'pdf'
+  if (modo === 'pdf' || (modo !== 'manual' && config?.tieneCatalogoPDF)) {
+    const chunks = pdfService.buscarEnPDF(query, config.tenantId);
+    if (chunks) {
+      console.log(`✅ Resultados encontrados en PDF para "${query}"`);
+      return `=== CATÁLOGO PDF ===\n${chunks}`;
+    }
+    if (modo === 'pdf') {
+      console.log(`⚠️ Sin resultados en PDF para "${query}"`);
+      if (telefono) await notificarDueno('error_bot', telefono, nombre, `❓ Cliente buscó "${query}" y no se encontró en el PDF.`, config);
+      return null;
+    }
+  }
+
   // modo === 'bsale' (default)
   // Siempre intentar primero el término original, luego las variantes IA
   const terminosIA = await geminiService.expandirTerminoBusqueda(query);
@@ -196,6 +212,16 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
 // ─── Detección automática de pago ─────────────────────────────────────────────
 function detectarPagoEnTexto(texto) {
   return /comprobante|transfer[ei]|pag[ué]|ya pag|hice la transfer|realic[eé] el pago|te mand[oé] el comprobante|adjunto comprobante|acá el comprobante|acá te mando/.test(texto.toLowerCase());
+}
+
+// ─── Extraer precio numérico del contexto de Bsale ───────────────────────────
+function extraerPrecioDeContexto(contexto) {
+  if (!contexto) return 0;
+  const match = contexto.match(/💵[^$\n]*\$\s*([\d.]+)/);
+  if (match) return parseInt(match[1].replace(/\./g, ''), 10) || 0;
+  // fallback: primer precio con $ que encuentre
+  const m2 = contexto.match(/\$\s*([\d.]{4,})/);
+  return m2 ? parseInt(m2[1].replace(/\./g, ''), 10) : 0;
 }
 
 // ─── Detección de datos de despacho ──────────────────────────────────────────
@@ -628,6 +654,35 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
             const bsaleCtx = await obtenerContextoBsale(prodAnterior, false, telefono, nombre, config);
             if (bsaleCtx !== null) contextoExtra = bsaleCtx;
           }
+
+          // ── Intentar generar link de pago si el tenant tiene pasarela configurada ──
+          const { pagoPasarela, pagoApiKey, pagoApiSecret } = config.credenciales;
+          if (pagoPasarela && pagoPasarela !== 'ninguna' && pagoApiKey && pagoApiSecret) {
+            try {
+              const monto = extraerPrecioDeContexto(contextoExtra);
+              if (monto > 0) {
+                const linkPago = await pagoService.generarLinkPago(config, {
+                  monto,
+                  descripcion: `Pedido ${prodAnterior || 'producto'} — ${empresa.nombre}`,
+                  telefono,
+                });
+                if (linkPago) {
+                  respuesta = await geminiService.generarRespuesta(texto, historial,
+                    contextoExtra + `\n\nEl cliente confirmó. Muestra el resumen del pedido con precio y luego AGREGA EXACTAMENTE este link de pago al final del mensaje:\n💳 *Paga aquí de forma segura:*\n${linkPago}\n_Válido por 24 horas ⏰_\nIndica que una vez pagado se coordinará el despacho.`,
+                    telefono, config);
+                  setEtapa(telefono, tenantId, 'pagando');
+                  limpiarCarrito(telefono, tenantId);
+                  followUpService.cancelarSeguimientos(telefono, tenantId);
+                  break;
+                }
+              }
+            } catch (errPago) {
+              console.error('[Pago] Error generando link:', errPago.message);
+              // Si falla la pasarela, cae al flujo normal de transferencia
+            }
+          }
+
+          // Flujo normal: datos de transferencia bancaria
           contextoExtra +=
             '\n\nEl cliente confirmó el pedido. Entrega los datos de transferencia completos.\n' +
             `Menciona que el envío se paga aparte al recibir (${envio.courier}). Pide el comprobante por WhatsApp.`;
@@ -716,6 +771,58 @@ INSTRUCCIONES:
 - NO des datos bancarios.
 - Tono amigable y práctico.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, ctxSoporte, telefono, config);
+        break;
+      }
+
+      case 'INICIAR_MATRICULA': {
+        const { pagoPasarela, pagoApiKey, pagoApiSecret } = config.credenciales;
+        const tieneLink = pagoPasarela && pagoPasarela !== 'ninguna' && pagoApiKey && pagoApiSecret;
+
+        // Buscar info del programa en el PDF si está disponible
+        const programaBuscado = await geminiService.extraerProductoConIA(texto, historial);
+        let ctxPrograma = '';
+        if (programaBuscado) ctxPrograma = await obtenerContextoBsale(programaBuscado, false, telefono, nombre, config) || '';
+
+        if (tieneLink) {
+          // Intentar generar link de matrícula
+          try {
+            const monto = extraerPrecioDeContexto(ctxPrograma) || 0;
+            if (monto > 0) {
+              const linkMatricula = await pagoService.generarLinkPago(config, {
+                monto,
+                descripcion: `Matrícula ${programaBuscado || 'programa'} — ${empresa.nombre}`,
+                telefono,
+              });
+              if (linkMatricula) {
+                respuesta = await geminiService.generarRespuesta(texto, historial,
+                  ctxPrograma + `\n\nEl estudiante quiere iniciar el proceso de matrícula/inscripción.
+INSTRUCCIÓN: Muestra un resumen breve del programa (nombre, duración, modalidad, arancel si aparece).
+Luego agrega EXACTAMENTE este link de pago de matrícula al final:
+💳 *Paga tu matrícula aquí:*\n${linkMatricula}\n_Válido por 48 horas_
+Indica que una vez realizado el pago, el equipo académico se contactará para completar los documentos.`,
+                  telefono, config);
+                setEtapa(telefono, tenantId, 'pagando');
+                await notificarDueno('comprobante', telefono, nombre, `📚 Matrícula iniciada — ${programaBuscado || 'programa'}`, config);
+                break;
+              }
+            }
+          } catch (errPago) {
+            console.error('[Matrícula] Error generando link:', errPago.message);
+          }
+        }
+
+        // Sin pasarela o sin precio: recopilar datos del estudiante
+        respuesta = await geminiService.generarRespuesta(texto, historial,
+          ctxPrograma + `\n\nEl estudiante quiere iniciar el proceso de matrícula/inscripción para "${programaBuscado || 'un programa'}".
+INSTRUCCIÓN: Indica los pasos del proceso de matrícula. Luego pide sus datos básicos:
+- Nombre completo
+- RUT
+- Email
+- Teléfono de contacto
+Explica que el equipo académico se contactará a la brevedad para completar la inscripción.`,
+          telefono, config);
+        await notificarDueno('solicitud_humano', telefono, nombre,
+          `📚 *SOLICITUD DE MATRÍCULA*\nEstudiante: ${nombre} (${telefono})\nPrograma: ${programaBuscado || 'sin especificar'}`, config);
         break;
       }
 

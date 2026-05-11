@@ -72,10 +72,14 @@ function buildConfig(tenant) {
       whatsappPhoneId: tenant.whatsapp_phone_id,
       whatsappToken:   tenant.whatsapp_token,
       notifTelefono:   tenant.notif_telefono,
+      pagoPasarela:    tenant.pasarela_tipo    || '',
+      pagoApiKey:      tenant.pasarela_api_key || '',
+      pagoApiSecret:   tenant.pasarela_api_secret || '',
     },
     embalajes,
-    tipoNegocio: tenant.tipo_negocio || 'tienda',
-    promptExtra:  tenant.prompt_extra  || '',
+    tipoNegocio:     tenant.tipo_negocio   || 'tienda',
+    promptExtra:     tenant.prompt_extra   || '',
+    tieneCatalogoPDF: !!tenant.modo_catalogo_pdf,
   };
 }
 

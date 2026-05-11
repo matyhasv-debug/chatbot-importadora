@@ -242,6 +242,34 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
     </div>
     <p id="cfg-msg" style="text-align:center;font-size:12px;margin-top:10px;color:var(--muted)"></p>
 
+    <!-- Catálogo PDF -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">📄 Catálogo en PDF</div>
+      <div id="cfg-pdf-info" style="font-size:12px;color:var(--muted);margin-bottom:10px">Cargando...</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--accent-light);color:var(--accent);border:1px solid #BFDBFE;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
+          📤 Subir PDF
+          <input type="file" id="cfg-pdf-input" accept=".pdf" style="display:none" onchange="subirPDF(this)">
+        </label>
+        <button id="cfg-pdf-del" onclick="eliminarPDF()" style="display:none;padding:8px 14px;background:var(--red-light);color:var(--red);border:1px solid #FECACA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">🗑️ Eliminar PDF</button>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">Máximo 20 MB. El bot usará el PDF como catálogo adicional al buscar productos.</p>
+    </div>
+
+    <!-- Pasarela de pago -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">💳 Pasarela de pago en línea</div>
+      <select id="cfg-pasarela" onchange="togglePasarela()" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);margin-bottom:10px">
+        <option value="ninguna">Sin pasarela (solo transferencia)</option>
+        <option value="flow">Flow (Chile)</option>
+      </select>
+      <div id="cfg-pasarela-fields" style="display:none;flex-direction:column;gap:8px">
+        <input id="cfg-pasarela-key" type="text" placeholder="API Key de Flow" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <input id="cfg-pasarela-secret" type="password" placeholder="API Secret de Flow" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg)">
+        <p style="font-size:11px;color:var(--muted)">Obtén tus credenciales en app.flow.cl → Configuración → API</p>
+      </div>
+    </div>
+
     <!-- Usuarios adicionales -->
     <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
       <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Usuarios del panel</div>
@@ -1346,8 +1374,14 @@ async function abrirConfigPanel() {
         document.getElementById('cfg-intl-activo').checked  = !!data.envio_internacional_activo;
         document.getElementById('cfg-intl-minimo').value    = data.envio_internacional_minimo_usd || '';
         document.getElementById('cfg-intl-couriers').value  = data.envio_internacional_couriers || '';
+        if (data.pasarela_tipo) {
+          document.getElementById('cfg-pasarela').value     = data.pasarela_tipo || 'ninguna';
+          document.getElementById('cfg-pasarela-key').value = data.pasarela_api_key || '';
+          togglePasarela();
+        }
       }
       cargarUsuarios();
+      cargarInfoPDF();
     } else {
       const data = await fetch('/panel/api/tenant-info?key=' + _key).then(r => r.json());
       if (data.ok) {
@@ -1369,6 +1403,62 @@ function cerrarConfigPanel() {
   document.getElementById('modal-config').style.display = 'none';
 }
 
+function togglePasarela() {
+  const v = document.getElementById('cfg-pasarela').value;
+  const f = document.getElementById('cfg-pasarela-fields');
+  f.style.display = (v && v !== 'ninguna') ? 'flex' : 'none';
+}
+
+async function cargarInfoPDF() {
+  if (!ES_CLIENTE) return;
+  try {
+    const d = await fetch(apiURL('/pdf-info'), { headers: getHeaders() }).then(r => r.json());
+    const el = $('cfg-pdf-info');
+    const delBtn = $('cfg-pdf-del');
+    if (d.tienePDF) {
+      el.textContent = `✅ PDF cargado — ${d.chunks} fragmentos indexados (${d.paginas} págs)`;
+      el.style.color = 'var(--green)';
+      delBtn.style.display = '';
+    } else {
+      el.textContent = 'Sin PDF cargado. Sube el catálogo o prospecto de tu negocio.';
+      el.style.color = 'var(--muted)';
+      delBtn.style.display = 'none';
+    }
+  } catch (_) {}
+}
+
+async function subirPDF(input) {
+  if (!input.files[0]) return;
+  const formData = new FormData();
+  formData.append('pdf', input.files[0]);
+  $('cfg-pdf-info').textContent = '⏳ Procesando PDF...';
+  $('cfg-pdf-info').style.color = 'var(--amber)';
+  try {
+    const h = getHeaders();
+    delete h['Content-Type']; // multer lo setea automáticamente con boundary
+    const r = await fetch(apiURL('/subir-pdf'), { method: 'POST', headers: h, body: formData }).then(r => r.json());
+    if (r.ok) {
+      toast(`✅ PDF cargado — ${r.chunks} fragmentos indexados`, 'var(--green)');
+      cargarInfoPDF();
+    } else {
+      toast('❌ ' + (r.error || 'Error al subir'), 'var(--red)');
+      $('cfg-pdf-info').textContent = '❌ Error al procesar el PDF';
+    }
+  } catch (_) {
+    toast('❌ Error de conexión', 'var(--red)');
+  }
+  input.value = '';
+}
+
+async function eliminarPDF() {
+  if (!confirm('¿Eliminar el catálogo PDF? El bot dejará de usarlo.')) return;
+  try {
+    await fetch(apiURL('/pdf'), { method: 'DELETE', headers: getHeaders() });
+    toast('🗑️ PDF eliminado', 'var(--text)');
+    cargarInfoPDF();
+  } catch (_) {}
+}
+
 async function guardarConfigPanel() {
   const body = {
     notif_telefono:                 document.getElementById('cfg-notif-tel').value.trim(),
@@ -1379,6 +1469,9 @@ async function guardarConfigPanel() {
     envio_internacional_activo:     document.getElementById('cfg-intl-activo').checked ? 1 : 0,
     envio_internacional_minimo_usd: parseInt(document.getElementById('cfg-intl-minimo').value) || 0,
     envio_internacional_couriers:   document.getElementById('cfg-intl-couriers').value.trim(),
+    pasarela_tipo:                  document.getElementById('cfg-pasarela')?.value || 'ninguna',
+    pasarela_api_key:               document.getElementById('cfg-pasarela-key')?.value.trim() || '',
+    pasarela_api_secret:            document.getElementById('cfg-pasarela-secret')?.value.trim() || '',
   };
   const msg = document.getElementById('cfg-msg');
   try {
