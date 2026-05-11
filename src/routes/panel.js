@@ -500,6 +500,25 @@ router.get('/:slug/api/stats', (req, res) => {
   const totalResp   = totalBot + totalHumano;
   const pctBot      = totalResp > 0 ? Math.round(totalBot / totalResp * 100) : 0;
 
+  // Revenue via pasarela de pago
+  let revenueFlow = 0, revenueFlowMes = 0;
+  try {
+    revenueFlow    = db.prepare(`SELECT COALESCE(SUM(monto),0) as n FROM pagos_pendientes WHERE tenant_id=? AND estado='pagado'`).get(tid)?.n || 0;
+    revenueFlowMes = db.prepare(`SELECT COALESCE(SUM(monto),0) as n FROM pagos_pendientes WHERE tenant_id=? AND estado='pagado' AND creado_en>=?`).get(tid, ts30d)?.n || 0;
+  } catch(_) {}
+
+  // Top productos consultados
+  let topProductos = [];
+  try {
+    topProductos = db.prepare(`SELECT carrito_producto as nombre, COUNT(*) as n FROM clientes WHERE tenant_id=? AND carrito_producto IS NOT NULL AND carrito_producto != '' GROUP BY carrito_producto ORDER BY n DESC LIMIT 5`).all(tid);
+  } catch(_) {}
+
+  // Actividad por hora — últimos 7 días
+  let actividadPorHora = [];
+  try {
+    actividadPorHora = db.prepare(`SELECT CAST(strftime('%H', creado_en) AS INT) as hora, COUNT(*) as n FROM conversaciones WHERE tenant_id=? AND creado_en>=? AND rol='user' GROUP BY hora ORDER BY hora`).all(tid, ts7d);
+  } catch(_) {}
+
   const stats = {
     mensajesHoy:    db.prepare(`SELECT COUNT(*) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tid).n,
     contactosHoy:   db.prepare(`SELECT COUNT(DISTINCT telefono) as n FROM conversaciones WHERE DATE(creado_en) = ? AND tenant_id = ?`).get(hoy, tid).n,
@@ -513,6 +532,7 @@ router.get('/:slug/api/stats', (req, res) => {
     porEstado,
     mensajesPorDia,
     eficienciaBot: { pctBot, totalBot, totalHumano },
+    revenueFlow, revenueFlowMes, topProductos, actividadPorHora,
   };
   res.json({ ok: true, stats });
 });
@@ -523,6 +543,17 @@ router.get('/:slug/api/contactos', (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
+  // Helper para enriquecer contactos con tags
+  function enriquecerConTags(rows) {
+    const tagsRows = db.prepare(`SELECT telefono, id, tag, color FROM cliente_tags WHERE tenant_id=?`).all(tenant.id);
+    const tagsMap = {};
+    for (const t of tagsRows) {
+      if (!tagsMap[t.telefono]) tagsMap[t.telefono] = [];
+      tagsMap[t.telefono].push({ id: t.id, tag: t.tag, color: t.color });
+    }
+    return rows.map(c => ({ ...c, tags: tagsMap[c.telefono] || [] }));
+  }
+
   const filtroEstado = req.query.estado || null;
   if (filtroEstado) {
     const contactos = db.prepare(`
@@ -536,7 +567,7 @@ router.get('/:slug/api/contactos', (req, res) => {
       GROUP BY cl.telefono
       ORDER BY ultimo_mensaje DESC LIMIT 200
     `).all(tenant.id, tenant.id, filtroEstado);
-    return res.json({ ok: true, contactos });
+    return res.json({ ok: true, contactos: enriquecerConTags(contactos) });
   }
   const mostrarArchivados = req.query.archivados === '1';
   const contactos = db.prepare(`
@@ -551,7 +582,7 @@ router.get('/:slug/api/contactos', (req, res) => {
     GROUP BY c.telefono
     ORDER BY ultimo_mensaje DESC LIMIT 200
   `).all(tenant.id, tenant.id, mostrarArchivados ? 1 : 0);
-  res.json({ ok: true, contactos });
+  res.json({ ok: true, contactos: enriquecerConTags(contactos) });
 });
 
 // ─── API cliente: mensajes ────────────────────────────────────────────────────
@@ -944,6 +975,72 @@ router.post('/:slug/api/archivar-conversacion', express.json(), (req, res) => {
   db.prepare(`UPDATE clientes SET archivado = ? WHERE telefono = ? AND tenant_id = ?`)
     .run(archivado ? 1 : 0, telefono, tenant.id);
   emitirEvento('conversacion_archivada', { telefono, archivado: !!archivado });
+  res.json({ ok: true });
+});
+
+// ─── API cliente: CRM — perfil completo ──────────────────────────────────────
+router.get('/:slug/api/crm/:telefono', (req, res) => {
+  const { slug, telefono } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  const tags   = db.prepare(`SELECT * FROM cliente_tags  WHERE tenant_id=? AND telefono=? ORDER BY creado_en ASC`).all(tenant.id, telefono);
+  const notas  = db.prepare(`SELECT * FROM cliente_notas WHERE tenant_id=? AND telefono=? ORDER BY creado_en DESC`).all(tenant.id, telefono);
+  const cliente = db.prepare(`SELECT * FROM clientes WHERE telefono=? AND tenant_id=?`).get(telefono, tenant.id);
+
+  let pedidos = [];
+  try { pedidos = db.prepare(`SELECT id, estado, productos, total, creado_en FROM pedidos WHERE telefono=? AND tenant_id=? ORDER BY creado_en DESC LIMIT 10`).all(telefono, tenant.id); } catch(_) {}
+
+  let pagos = [];
+  try { pagos = db.prepare(`SELECT orden_id, monto, descripcion, estado, creado_en FROM pagos_pendientes WHERE telefono=? AND tenant_id=? ORDER BY creado_en DESC LIMIT 5`).all(telefono, tenant.id); } catch(_) {}
+
+  res.json({ ok: true, tags, notas, cliente, pedidos, pagos });
+});
+
+// ─── API cliente: CRM — agregar tag ──────────────────────────────────────────
+router.post('/:slug/api/crm/:telefono/tags', express.json(), (req, res) => {
+  const { slug, telefono } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { tag, color = '#1D4ED8' } = req.body;
+  if (!tag?.trim()) return res.status(400).json({ ok: false, error: 'Falta tag' });
+  try {
+    const r = db.prepare(`INSERT OR IGNORE INTO cliente_tags (tenant_id, telefono, tag, color) VALUES (?,?,?,?)`).run(tenant.id, telefono, tag.trim(), color);
+    res.json({ ok: true, id: r.lastInsertRowid });
+  } catch(err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── API cliente: CRM — eliminar tag ─────────────────────────────────────────
+router.delete('/:slug/api/crm/:telefono/tags/:id', (req, res) => {
+  const { slug, telefono, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM cliente_tags WHERE id=? AND tenant_id=? AND telefono=?`).run(id, tenant.id, telefono);
+  res.json({ ok: true });
+});
+
+// ─── API cliente: CRM — agregar nota ─────────────────────────────────────────
+router.post('/:slug/api/crm/:telefono/notas', express.json(), (req, res) => {
+  const { slug, telefono } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { nota, autor = 'Panel' } = req.body;
+  if (!nota?.trim()) return res.status(400).json({ ok: false, error: 'Falta nota' });
+  const r = db.prepare(`INSERT INTO cliente_notas (tenant_id, telefono, nota, autor) VALUES (?,?,?,?)`).run(tenant.id, telefono, nota.trim(), autor);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+// ─── API cliente: CRM — eliminar nota ────────────────────────────────────────
+router.delete('/:slug/api/crm/:telefono/notas/:id', (req, res) => {
+  const { slug, telefono, id } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM cliente_notas WHERE id=? AND tenant_id=? AND telefono=?`).run(id, tenant.id, telefono);
   res.json({ ok: true });
 });
 

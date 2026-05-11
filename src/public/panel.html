@@ -184,6 +184,24 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
 
 #toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;font-size:12px;font-weight:600;padding:10px 16px;border-radius:10px;display:none;z-index:999;animation:toastIn .2s ease}
 @keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+
+/* CRM sidebar */
+.crm-panel{width:252px;flex-shrink:0;background:var(--surf);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-direction:column}
+.crm-panel::-webkit-scrollbar{width:3px}
+.crm-panel::-webkit-scrollbar-thumb{background:var(--border)}
+.crm-head{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;flex-shrink:0}
+.crm-section{padding:12px 14px;border-bottom:1px solid var(--border)}
+.crm-stitle{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.tag-chip{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;color:#fff;margin:2px;white-space:nowrap}
+.tag-x{cursor:pointer;font-size:11px;opacity:.75;line-height:1}
+.tag-x:hover{opacity:1}
+.nota-item{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.5;position:relative;padding-right:24px}
+.nota-del{position:absolute;top:6px;right:8px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);opacity:.6;line-height:1}
+.nota-del:hover{opacity:1;color:var(--red)}
+.nota-ts{font-size:10px;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace}
+.hist-item{font-size:12px;padding:7px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:6px}
+.hist-item:last-child{border-bottom:none}
+.tag-mini{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;color:#fff;margin-left:3px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -361,6 +379,30 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
         </div>
       </div>
     </section>
+
+    <!-- CRM sidebar derecho -->
+    <aside class="crm-panel" id="crm-panel" style="display:none">
+      <div class="crm-head">📋 Perfil del cliente</div>
+      <div class="crm-section">
+        <div class="crm-stitle">Etiquetas</div>
+        <div id="crm-tags" style="display:flex;flex-wrap:wrap;min-height:24px"></div>
+        <div style="display:flex;gap:5px;margin-top:8px">
+          <input id="crm-tag-input" type="text" placeholder="Nueva etiqueta..." onkeydown="if(event.key==='Enter')agregarTag()" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;background:var(--bg);min-width:0">
+          <input id="crm-tag-color" type="color" value="#1D4ED8" style="width:30px;height:30px;border:1px solid var(--border);border-radius:6px;padding:2px;cursor:pointer;background:var(--bg);flex-shrink:0">
+          <button onclick="agregarTag()" style="padding:5px 10px;border-radius:7px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:700;flex-shrink:0">+</button>
+        </div>
+      </div>
+      <div class="crm-section">
+        <div class="crm-stitle">Notas internas</div>
+        <div id="crm-notas"></div>
+        <textarea id="crm-nota-input" placeholder="Escribir nota..." style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;resize:vertical;min-height:52px;outline:none;background:var(--bg);margin-top:4px;transition:border-color .15s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        <button onclick="agregarNota()" style="margin-top:5px;width:100%;padding:6px;border-radius:7px;background:var(--surf2);border:1px solid var(--border);cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);font-family:'Plus Jakarta Sans',sans-serif">+ Guardar nota</button>
+      </div>
+      <div class="crm-section" style="flex:1">
+        <div class="crm-stitle">Historial</div>
+        <div id="crm-hist"></div>
+      </div>
+    </aside>
   </div>
 
   <!-- METRICAS -->
@@ -532,12 +574,13 @@ function renderContactos() {
   list.innerHTML = cs.map(c => {
     const s = ESTADOS[c.estado] || ESTADOS.en_conversacion;
     const sel = c.telefono === telefonoActivo ? 'sel' : '';
+    const tagsHTML = (c.tags || []).slice(0, 3).map(t => `<span class="tag-mini" style="background:${esc(t.color)}">${esc(t.tag)}</span>`).join('');
     return `<div class="contact ${sel}" onclick="seleccionar('${c.telefono}','${(c.nombre || '').replace(/'/g, "\\'")}','${c.estado || 'en_conversacion'}')">
       <div class="c-row1">
         <span class="c-name">${esc(c.nombre || 'Sin nombre')}</span>
         <span class="c-time">${fmt(c.ultimo_mensaje)}</span>
       </div>
-      <div class="c-phone">${c.telefono}</div>
+      <div class="c-phone">${c.telefono}${tagsHTML}</div>
       <span class="badge ${s.cls}">${s.e} ${s.label}</span>
     </div>`;
   }).join('');
@@ -692,6 +735,7 @@ function seleccionar(tel, nom, est) {
   totalMensajesRenderizados = 0;
   cargarMensajes(tel, { forceScroll: true });
   renderContactos();
+  if (ES_CLIENTE) { $('crm-panel').style.display = 'flex'; cargarCRM(tel); }
 }
 
 function verTodos() {
@@ -820,6 +864,19 @@ async function cargarMetricas() {
     const maxD  = Math.max(...dias.map(d => d.count), 1);
     const ef    = s.eficienciaBot || { pctBot: 0, totalBot: 0, totalHumano: 0 };
 
+    // Preparar heatmap de horas
+    const horasMap = {};
+    for (const h of (s.actividadPorHora || [])) horasMap[h.hora] = h.n;
+    const maxH = Math.max(...Object.values(horasMap), 1);
+    const horaBarras = Object.keys(horasMap).length ? Array.from({length:24},(_,h)=>{
+      const n = horasMap[h]||0;
+      const px = Math.max(Math.round(n/maxH*48),n>0?2:0);
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${h}:00 — ${n} msgs">
+        <div style="width:100%;height:${px}px;background:var(--accent);border-radius:2px 2px 0 0;opacity:${n>0?.8:.1}"></div>
+        ${h%6===0?`<span style="font-size:8px;color:var(--muted)">${h}h</span>`:''}
+      </div>`;
+    }).join('') : '';
+
     $('metrics-content').innerHTML = `
       <div>
         <div class="section-title">Resumen — últimas 24 h / 7 días / 30 días</div>
@@ -854,6 +911,11 @@ async function cargarMetricas() {
             <div class="kpi-lbl">Total clientes</div>
             <div class="kpi-sub">${s.totalMensajes || 0} mensajes histórico</div>
           </div>
+          ${s.revenueFlow > 0 ? `<div class="kpi">
+            <div class="kpi-val" style="color:var(--green)">$${Math.round(s.revenueFlow).toLocaleString('es-CL')}</div>
+            <div class="kpi-lbl">Revenue (Flow)</div>
+            <div class="kpi-sub">Este mes: $${Math.round(s.revenueFlowMes||0).toLocaleString('es-CL')}</div>
+          </div>` : ''}
         </div>
       </div>
 
@@ -900,6 +962,22 @@ async function cargarMetricas() {
             </div>`).join('')}
         </div>
       </div>
+
+      ${s.topProductos && s.topProductos.length ? `<div class="card">
+        <div class="section-title">Top productos consultados</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+          ${s.topProductos.map((p, i) => `<div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:10px;font-weight:700;width:14px;color:var(--muted);text-align:right">${i+1}</span>
+            <div style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(p.nombre)}</div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);font-weight:700;white-space:nowrap">${p.n}×</span>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      ${horaBarras ? `<div class="card">
+        <div class="section-title">Actividad por hora — últimos 7 días</div>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:60px;margin-top:8px">${horaBarras}</div>
+      </div>` : ''}
     `;
   } catch (_) {
     $('metrics-content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Error cargando métricas</p></div>';
@@ -1113,6 +1191,7 @@ async function archivarConversacion() {
       telefonoActivo = null;
       $('ch-actions').style.display = 'none';
       $('chat-search').style.display = 'none';
+      $('crm-panel').style.display = 'none';
       $('ch-name').textContent = 'Selecciona un contacto';
       $('ch-sub').textContent = 'Vista general en tiempo real';
       $('messages').innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Selecciona un contacto</p></div>';
@@ -1456,6 +1535,79 @@ async function eliminarPDF() {
     await fetch(apiURL('/pdf'), { method: 'DELETE', headers: getHeaders() });
     toast('🗑️ PDF eliminado', 'var(--text)');
     cargarInfoPDF();
+  } catch (_) {}
+}
+
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+async function cargarCRM(tel) {
+  if (!ES_CLIENTE || !tel) return;
+  $('crm-tags').innerHTML = '<span style="color:var(--muted);font-size:11px">...</span>';
+  $('crm-notas').innerHTML = '';
+  $('crm-hist').innerHTML = '<span style="color:var(--muted);font-size:11px">...</span>';
+  try {
+    const d = await fetch(apiURL('/crm/' + encodeURIComponent(tel)), { headers: getHeaders() }).then(r => r.json());
+    if (!d.ok) return;
+
+    $('crm-tags').innerHTML = d.tags.length
+      ? d.tags.map(t => `<span class="tag-chip" style="background:${esc(t.color)}">${esc(t.tag)}<span class="tag-x" onclick="eliminarTag(${t.id},'${esc(tel)}')">×</span></span>`).join('')
+      : '<span style="color:var(--muted);font-size:11px">Sin etiquetas</span>';
+
+    $('crm-notas').innerHTML = d.notas.length
+      ? d.notas.map(n => `<div class="nota-item">${esc(n.nota)}<button class="nota-del" onclick="eliminarNota(${n.id},'${esc(tel)}')">×</button><div class="nota-ts">${esc(n.autor)} · ${fmt(n.creado_en)}</div></div>`).join('')
+      : '<span style="color:var(--muted);font-size:11px">Sin notas</span>';
+
+    const items = [
+      ...(d.pagos || []).map(p => ({ ts: p.creado_en, icon: '💳', desc: p.descripcion || 'Pago Flow', monto: p.monto, estado: p.estado })),
+      ...(d.pedidos || []).map(p => ({ ts: p.creado_en, icon: '📦', desc: 'Pedido #' + p.id, monto: p.total, estado: p.estado })),
+    ].sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 6);
+
+    $('crm-hist').innerHTML = items.length
+      ? items.map(i => `<div class="hist-item">
+          <span style="font-size:12px">${i.icon} <strong>$${Math.round(i.monto||0).toLocaleString('es-CL')}</strong></span>
+          <span style="font-size:10px;color:var(--muted);text-align:right">${i.estado}</span>
+        </div>`).join('')
+      : '<span style="color:var(--muted);font-size:11px">Sin historial</span>';
+  } catch (_) {}
+}
+
+async function agregarTag() {
+  if (!telefonoActivo || !ES_CLIENTE) return;
+  const tag   = $('crm-tag-input').value.trim();
+  const color = $('crm-tag-color').value;
+  if (!tag) { $('crm-tag-input').focus(); return; }
+  try {
+    const r = await fetch(apiURL('/crm/' + encodeURIComponent(telefonoActivo) + '/tags'), {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ tag, color })
+    }).then(r => r.json());
+    if (r.ok) { $('crm-tag-input').value = ''; cargarCRM(telefonoActivo); cargarContactos(); }
+    else toast('❌ ' + (r.error || 'Error al agregar tag'), 'var(--red)');
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function eliminarTag(id, tel) {
+  try {
+    await fetch(apiURL('/crm/' + encodeURIComponent(tel) + '/tags/' + id), { method: 'DELETE', headers: getHeaders() });
+    cargarCRM(tel); cargarContactos();
+  } catch (_) {}
+}
+
+async function agregarNota() {
+  if (!telefonoActivo || !ES_CLIENTE) return;
+  const nota = $('crm-nota-input').value.trim();
+  if (!nota) { $('crm-nota-input').focus(); return; }
+  try {
+    const r = await fetch(apiURL('/crm/' + encodeURIComponent(telefonoActivo) + '/notas'), {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ nota })
+    }).then(r => r.json());
+    if (r.ok) { $('crm-nota-input').value = ''; cargarCRM(telefonoActivo); toast('✅ Nota guardada', 'var(--green)'); }
+    else toast('❌ ' + (r.error || 'Error al guardar'), 'var(--red)');
+  } catch (_) { toast('❌ Error de conexión', 'var(--red)'); }
+}
+
+async function eliminarNota(id, tel) {
+  try {
+    await fetch(apiURL('/crm/' + encodeURIComponent(tel) + '/notas/' + id), { method: 'DELETE', headers: getHeaders() });
+    cargarCRM(tel);
   } catch (_) {}
 }
 

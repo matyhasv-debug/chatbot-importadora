@@ -152,6 +152,25 @@ const migraciones = [
   `ALTER TABLE tenants ADD COLUMN pasarela_api_key TEXT DEFAULT ''`,
   `ALTER TABLE tenants ADD COLUMN pasarela_api_secret TEXT DEFAULT ''`,
   `ALTER TABLE tenants ADD COLUMN modo_catalogo_pdf INTEGER DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS cliente_tags (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    telefono  TEXT NOT NULL,
+    tag       TEXT NOT NULL,
+    color     TEXT DEFAULT '#1D4ED8',
+    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, telefono, tag)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tags_tel ON cliente_tags(tenant_id, telefono)`,
+  `CREATE TABLE IF NOT EXISTS cliente_notas (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    telefono  TEXT NOT NULL,
+    nota      TEXT NOT NULL,
+    autor     TEXT DEFAULT 'Panel',
+    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notas_tel ON cliente_notas(tenant_id, telefono)`,
 ];
 
 for (const sql of migraciones) {
