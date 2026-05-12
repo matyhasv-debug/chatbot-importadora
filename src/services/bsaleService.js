@@ -41,7 +41,6 @@ function generarVariantesBusqueda(query) {
   // Genera variantes singulares de una palabra en español.
   // Agrega AMBAS formas cuando termina en 'es' para cubrir:
   //   "estantes" → "estante" (quitar 's') Y "estant" (quitar 'es')
-  // Bsale ignora los términos que no existen, así que variantes extra no hacen daño.
   const procesarSingulares = (texto) => {
     const res = [];
     if (texto.endsWith('es') && texto.length > 4) {
@@ -53,13 +52,23 @@ function generarVariantesBusqueda(query) {
     return res;
   };
 
+  // Genera variante de género opuesto para sustantivos de electrodomésticos.
+  // secadora → secador, aspiradora → aspirador, tostadora → tostador (y viceversa)
+  const varianteGenero = (texto) => {
+    if (texto.endsWith('dora')) return [texto.slice(0, -1)];   // secadora → secador
+    if (texto.endsWith('dor'))  return [texto + 'a'];           // secador  → secadora
+    return [];
+  };
+
   for (const s of procesarSingulares(q)) variantes.add(s);
+  for (const g of varianteGenero(q))     variantes.add(g);
 
   // Agregar cada palabra significativa por separado (>3 chars) para ampliar búsqueda
   for (const p of palabras) {
     if (p.length > 3) {
       variantes.add(p);
       for (const s of procesarSingulares(p)) variantes.add(s);
+      for (const g of varianteGenero(p))     variantes.add(g);
     }
   }
 
