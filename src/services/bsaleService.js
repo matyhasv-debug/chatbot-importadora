@@ -157,7 +157,7 @@ async function obtenerStock(variantId, token = null) {
       headers: { 'access_token': bsaleToken },
       params:  { variantid: variantId },
     });
-    return (data.items || []).reduce((acc, item) => acc + (item.quantity || 0), 0);
+    return (data.items || []).reduce((acc, item) => acc + (item.quantityAvailable ?? item.quantity ?? 0), 0);
   } catch (e) {
     return 0;
   }

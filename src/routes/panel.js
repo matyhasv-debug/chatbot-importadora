@@ -662,13 +662,21 @@ async function enviarNotifDueno(tenant, slug, body) {
 // ─── API cliente: test de notificación ───────────────────────────────────────
 router.get('/:slug/api/test-bsale', async (req, res) => {
   const { slug } = req.params;
-  const { q } = req.query;
+  const { q, variantid } = req.query;
   const tenant = db.prepare(`SELECT id, slug, bsale_token FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false, error: `Tenant '${slug}' no encontrado` });
-  if (!q) return res.status(400).json({ ok: false, error: 'Falta ?q=termino' });
+  const token = tenant.bsale_token || process.env.BSALE_TOKEN;
   try {
+    // Modo: ver stock crudo de una variante específica
+    if (variantid) {
+      const { data } = await axios.get(`https://api.bsale.io/v1/stocks.json`, {
+        headers: { 'access_token': token },
+        params: { variantid },
+      });
+      return res.json({ ok: true, variantid, stock_raw: data.items });
+    }
+    if (!q) return res.status(400).json({ ok: false, error: 'Falta ?q=termino o ?variantid=ID' });
     const bsaleService = require('../services/bsaleService');
-    const token = tenant.bsale_token || process.env.BSALE_TOKEN;
     const resultados = await bsaleService.buscarConPreciosYStock(q, false, token);
     res.json({ ok: true, query: q, token_origen: tenant.bsale_token ? 'tenant-db' : 'env-variable', total: resultados?.length || 0, resultados });
   } catch (err) {
