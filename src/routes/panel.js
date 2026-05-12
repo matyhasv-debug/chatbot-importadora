@@ -660,6 +660,23 @@ async function enviarNotifDueno(tenant, slug, body) {
 }
 
 // ─── API cliente: test de notificación ───────────────────────────────────────
+router.get('/:slug/api/test-bsale', async (req, res) => {
+  const { slug } = req.params;
+  const { q } = req.query;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  if (!q) return res.status(400).json({ ok: false, error: 'Falta ?q=termino' });
+  try {
+    const bsaleService = require('../services/bsaleService');
+    const token = tenant.bsale_token || process.env.BSALE_TOKEN;
+    const resultados = await bsaleService.buscarConPreciosYStock(q, false, token);
+    res.json({ ok: true, query: q, token_origen: tenant.bsale_token ? 'tenant' : 'env', resultados });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/:slug/api/test-notificacion', express.json(), async (req, res) => {
   const { slug } = req.params;
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
