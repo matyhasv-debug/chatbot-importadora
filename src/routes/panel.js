@@ -663,15 +663,14 @@ async function enviarNotifDueno(tenant, slug, body) {
 router.get('/:slug/api/test-bsale', async (req, res) => {
   const { slug } = req.params;
   const { q } = req.query;
-  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
-  if (!tenant) return res.status(404).json({ ok: false });
-  if (!verificarAuthCliente(req, res, tenant)) return;
+  const tenant = db.prepare(`SELECT id, slug, bsale_token FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false, error: `Tenant '${slug}' no encontrado` });
   if (!q) return res.status(400).json({ ok: false, error: 'Falta ?q=termino' });
   try {
     const bsaleService = require('../services/bsaleService');
     const token = tenant.bsale_token || process.env.BSALE_TOKEN;
     const resultados = await bsaleService.buscarConPreciosYStock(q, false, token);
-    res.json({ ok: true, query: q, token_origen: tenant.bsale_token ? 'tenant' : 'env', resultados });
+    res.json({ ok: true, query: q, token_origen: tenant.bsale_token ? 'tenant-db' : 'env-variable', total: resultados?.length || 0, resultados });
   } catch (err) {
     res.json({ ok: false, error: err.message });
   }
