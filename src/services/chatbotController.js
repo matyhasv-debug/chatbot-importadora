@@ -615,17 +615,23 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
       }
 
       case 'PRECIO_MAYORISTA': {
-        const cantidad = extraerCantidad(texto);
+        // Buscar cantidad en texto actual; si no hay, buscar en historial reciente
+        let cantMayor = extraerCantidad(texto);
+        if (cantMayor <= 1) {
+          const histTexto = historial.slice(-10).map(m => m.mensaje).join(' ');
+          const cantHist  = extraerCantidad(histTexto);
+          if (cantHist > 1) cantMayor = cantHist;
+        }
         const producto = await geminiService.extraerProductoConIA(texto, historial);
-        const esMayor  = cantidad >= bsaleService.MINIMO_MAYORISTA;
+        const esMayor  = cantMayor >= bsaleService.MINIMO_MAYORISTA;
         contextoExtra  = await obtenerContextoBsale(producto, esMayor, telefono, nombre, config);
         if (contextoExtra === null) {
           respuesta = `No encontramos "${producto}" en nuestro catálogo actualmente. ¿Buscas otro producto? 😊`;
           break;
         }
         contextoExtra += esMayor
-          ? `\n\nEl cliente quiere ${cantidad} unidades — mostrar precio mayorista.`
-          : `\n\nEl cliente quiere ${cantidad} unidades — precio unitario aplica. Mencionar que desde ${bsaleService.MINIMO_MAYORISTA} unidades hay precio mayorista.`;
+          ? `\n\nEl cliente quiere ${cantMayor} unidades — mostrar precio mayorista. Si no hay precio mayorista en el catálogo, indica que para ese volumen deben contactar directamente para obtener cotización especial.`
+          : `\n\nEl cliente quiere ${cantMayor} unidades — precio unitario aplica. Mencionar que desde ${bsaleService.MINIMO_MAYORISTA} unidades hay precio mayorista.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
         followUpService.programarSeguimiento(telefono, 'follow_up_precio', 180, tenantId);
         break;
@@ -661,7 +667,20 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
         break;
       }
 
-      case 'CONFIRMAR':
+      case 'CONFIRMAR': {
+        // "Sí/Ok/Dale" genérico — solo avanza a compra si el último mensaje del bot
+        // era explícitamente "¿Confirmamos?" o similar. De lo contrario responde en contexto.
+        const ultimaBotMsg = historial.filter(m => m.rol === 'assistant').slice(-1)[0]?.mensaje || '';
+        const eraConfirmPedido = /confirmamos\?|¿lo sep[ao]r[ao]|hacemos el pedido|quieres comprar|¿confirmás|confirmas\?/i.test(ultimaBotMsg);
+        if (etapa === 'cotizando' && eraConfirmPedido) {
+          intent = 'CONFIRMAR_PEDIDO'; // caer al case de abajo
+        } else {
+          respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
+          break;
+        }
+        // falls through to CONFIRMAR_PEDIDO
+      }
+      // eslint-disable-next-line no-fallthrough
       case 'CONFIRMAR_PEDIDO': {
         if (etapa === 'cotizando') {
           const prodAnterior = await geminiService.extraerProductoConIA(texto || '', historial);
