@@ -223,8 +223,8 @@ function formatearParaBot(resultados) {
         if (prod.incluirMayorista) {
           const precioMay2 = v.precios.mayorista2 > 0
             ? `📦 Precio mayorista (+${MINIMO_MAYORISTA} u.): $${Math.round(v.precios.mayorista2).toLocaleString('es-CL')}`
-            : null;
-          if (precioMay2) lineas.push(`  ${precioMay2}`);
+            : `📦 Precio mayorista: CONSULTAR DIRECTAMENTE (no disponible en sistema)`;
+          lineas.push(`  ${precioMay2}`);
         } else {
           lineas.push(`  _(Para +${MINIMO_MAYORISTA} unidades consulta precio mayorista)_`);
         }

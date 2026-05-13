@@ -651,17 +651,21 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
           contextoExtra = bsaleCtx;
           if (/💵/.test(bsaleCtx)) guardarCarrito(telefono, tenantId, producto);
         }
-        contextoExtra +=
-          `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
+        const instrPedido = esMayor
+          ? `\n\nEl cliente quiere ${cantidad} unidades de "${producto}" (pedido mayorista).
+INSTRUCCIÓN CRÍTICA: Si el catálogo dice "CONSULTAR DIRECTAMENTE" para precio mayorista, NO calcules ningún total. Di: "Para ${cantidad} unidades te ofrezco precio especial mayorista 📦 Contáctanos directamente para cotizar ese volumen. ¿Quieres que te pase el teléfono o email de ventas?" — NO des precio unitario × cantidad como total.
+Si SÍ hay precio mayorista en el catálogo, muestra el resumen con ese precio mayorista.`
+          : `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
 INSTRUCCIÓN: Muestra el resumen del pedido:
 📋 *Resumen de tu pedido:*
 - Producto: [nombre]
 - Cantidad: ${cantidad} unidad(es)
-- Precio: $[precio]
+- Precio: $[precio unitario]
 - Envío: Por pagar al recibir (${envio.courier} 🚚)
 ━━━━━━━━━━━━━━━━
-💵 *Total a transferir: $[precio]*
+💵 *Total a transferir: $[total]*
 Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
+        contextoExtra += instrPedido;
         respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
         setEtapa(telefono, tenantId, 'cotizando');
         break;
