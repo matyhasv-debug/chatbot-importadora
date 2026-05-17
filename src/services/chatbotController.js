@@ -288,6 +288,23 @@ async function procesarMensaje(data) {
 
     if (!texto && !mediaInfo) return;
 
+    // ── Demo USAIA: responder con info del servicio cuando alguien llega desde la web ──
+    if (texto && /usaia/i.test(texto)) {
+      const msgDemo =
+        `¡Hola! 👋 Soy un bot de *USAIA* en acción.\n\n` +
+        `Pruébame — pregúntame por un producto, un precio o simula un pedido. Así es como respondería el bot de *tu* negocio.\n\n` +
+        `📦 *Planes disponibles:*\n` +
+        `• *Starter* — $39.000/mes (hasta 500 conversaciones)\n` +
+        `• *Pro* — $89.000/mes (ilimitado + Bsale + citas + campañas)\n` +
+        `• *Empresarial* — a medida\n\n` +
+        `¿Quieres más info o agendar una llamada?\n` +
+        `📱 Escríbele a Matías: wa.me/56999269035`;
+      await enviarMensaje(telefono, msgDemo, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+      guardarMensaje(telefono, nombre, 'assistant', msgDemo, tenantId);
+      return;
+    }
+
     registrarCliente(telefono, nombre, tenantId);
 
     const textoParaGuardar = texto || `[${(tipo || 'media').toUpperCase()}]`;
