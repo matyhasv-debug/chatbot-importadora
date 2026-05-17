@@ -294,42 +294,65 @@ async function procesarMensaje(data) {
       historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje));
 
     if (texto && esDemoUSAIA) {
-      const PLANES_USAIA = `
-=== PLANES USAIA ===
-• *Starter* — $39.000/mes + $50.000 configuración (único)
-  ✅ Bot IA 24/7, hasta 500 conversaciones/mes, catálogo manual, panel admin
-  ❌ Sin Bsale, sin Google Calendar, sin campañas
+      const PLANES_USAIA = `=== PLANES USAIA ===
+• *Starter* $39.000/mes (+$50.000 configuración única)
+  ✅ Bot IA 24/7 · hasta 500 conversaciones · catálogo manual · panel admin
+  ❌ Sin Bsale · sin Google Calendar · sin campañas
 
-• *Pro* — $89.000/mes + $80.000 configuración (único)
-  ✅ Conversaciones ilimitadas, Bsale en tiempo real, Google Calendar,
-     pedidos, campañas masivas, CRM, métricas, links de pago automáticos
+• *Pro* $89.000/mes (+$80.000 configuración única)
+  ✅ Conversaciones ilimitadas · Bsale en tiempo real · Google Calendar
+  ✅ Pedidos · campañas masivas · CRM · métricas · links de pago
 
 • *Empresarial* — precio a cotizar
-  ✅ Todo Pro + múltiples números, integraciones a medida, soporte prioritario
+  ✅ Todo Pro + múltiples números · flujos a medida · soporte prioritario
 
-📱 Contacto Matías: wa.me/56999269035
-🌐 usaiahoy.cl`.trim();
+📱 Habla con Matías: wa.me/56999269035 · 🌐 usaiahoy.cl`;
 
-      // Si el mensaje parece búsqueda de producto → buscar en Bsale real para demostrar
-      const pareceBusqueda = texto.length > 2 &&
-        !/usaia|plan|precio|starter|pro|empresarial|contratar|agendar|info|cuesta|vale|cobras/i.test(texto);
+      const esInicioDemo = /usaia/i.test(texto);
+      const pareceBusqueda = !esInicioDemo && texto.length > 2 &&
+        !/plan|precio|starter|pro|empresarial|contratar|agendar|info|cuanto|cuesta|vale|cobras|incluye/i.test(texto);
 
-      let ctxDemo = '';
+      let msgDemo = '';
+
+      if (esInicioDemo) {
+        // Primer mensaje: bienvenida + productos de ejemplo del catálogo real
+        const ejemplos = await bsaleService.obtenerProductosEjemplo(config?.credenciales?.bsaleToken, 4);
+        const listaEjemplos = ejemplos.length
+          ? `\nPrueba preguntándome por:\n${ejemplos.map(p => `• ${p}`).join('\n')}`
+          : '\nPrueba preguntándome por cualquier producto.';
+        msgDemo =
+          `¡Hola! 👋 Bienvenido a la demo en vivo de *USAIA*.\n\n` +
+          `Esto que ves es un bot real, conectado a Bsale en tiempo real.\n` +
+          `Pregúntame por un producto y verás cómo responde tu bot.${listaEjemplos}\n\n` +
+          `O si prefieres ver los *planes y precios*, escríbeme "planes" 📊`;
+
+        await enviarMensaje(telefono, msgDemo, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+        guardarMensaje(telefono, nombre, 'assistant', msgDemo, tenantId);
+        return;
+      }
+
+      // Mensajes siguientes: buscar producto o responder sobre planes con IA
+      let ctxDemo = PLANES_USAIA;
       if (pareceBusqueda) {
         const bsaleCtx = await obtenerContextoBsale(texto, false, telefono, nombre, config).catch(() => null);
         if (bsaleCtx) {
-          ctxDemo = `[DEMO EN VIVO — resultado real desde Bsale]:\n${bsaleCtx}\n\n` +
-            `👆 Así respondería tu bot en tiempo real. Esto es el catálogo de un cliente real conectado a Bsale.\n\n${PLANES_USAIA}`;
+          ctxDemo = `[RESULTADO EN VIVO desde Bsale del cliente demo]:\n${bsaleCtx}\n\n` +
+            `INSTRUCCIÓN: Muestra este resultado como si fueras el bot del negocio real. ` +
+            `Al final agrega una línea: "_👆 Así respondería el bot de tu negocio en tiempo real._"\n\n` + PLANES_USAIA;
         } else {
-          ctxDemo = `El producto "${texto}" no está en el catálogo de demo, pero en tu negocio el bot buscaría en tu propio Bsale.\n\n${PLANES_USAIA}`;
+          const ejemplos = await bsaleService.obtenerProductosEjemplo(config?.credenciales?.bsaleToken, 3);
+          const sugerencias = ejemplos.length ? `\nPrueba con: ${ejemplos.map(p => `*${p}*`).join(', ')}` : '';
+          msgDemo = `Ese producto no está en el catálogo de esta demo 😅 En tu negocio el bot buscaría en tu propio Bsale.${sugerencias}`;
+          await enviarMensaje(telefono, msgDemo, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+          guardarMensaje(telefono, nombre, 'assistant', msgDemo, tenantId);
+          return;
         }
-      } else {
-        ctxDemo = PLANES_USAIA;
       }
 
-      const USAIA_CONTEXTO = `Eres el asistente de demostración de USAIA (usaiahoy.cl).
-Tu objetivo: mostrar cómo funciona el bot y explicar los planes. Sé breve y directo.
-Si preguntan por un plan, explica qué incluye. Si quieren contratar, deriva a Matías.
+      const USAIA_CONTEXTO = `Eres el asistente de demostración de USAIA (usaiahoy.cl). Sé breve y directo.
+Si preguntan por un plan, explica qué incluye. Si quieren contratar, deriva a Matías (wa.me/56999269035).
 NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
 
       const historialUsaia = historialPrevio.map(m => ({ rol: m.rol, mensaje: m.mensaje }));

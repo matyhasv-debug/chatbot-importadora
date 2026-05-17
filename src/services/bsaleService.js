@@ -75,6 +75,20 @@ function generarVariantesBusqueda(query) {
   return [...variantes];
 }
 
+// ─── Obtener productos de ejemplo para demo ───────────────────────────────────
+async function obtenerProductosEjemplo(token = null, cantidad = 4) {
+  const bsaleToken = token || process.env.BSALE_TOKEN;
+  try {
+    const { data } = await api.get('/products.json', {
+      headers: { 'access_token': bsaleToken },
+      params: { limit: cantidad, state: 0 },
+    });
+    return (data.items || []).map(p => p.name).filter(Boolean).slice(0, cantidad);
+  } catch (e) {
+    return [];
+  }
+}
+
 // ─── Buscar productos por nombre ──────────────────────────────────────────────
 async function buscarProductos(query, limite = 4, token = null) {
   const bsaleToken = token || process.env.BSALE_TOKEN;
@@ -249,5 +263,6 @@ module.exports = {
   buscarConPreciosYStock,
   formatearParaBot,
   tieneStock,
+  obtenerProductosEjemplo,
   MINIMO_MAYORISTA,
 };
