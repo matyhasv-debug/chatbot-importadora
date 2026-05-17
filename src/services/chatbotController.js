@@ -294,54 +294,49 @@ async function procesarMensaje(data) {
       historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje));
 
     if (texto && esDemoUSAIA) {
-      const USAIA_CONTEXTO = `
-Eres el bot de demostración de USAIA (usaiahoy.cl), un sistema de automatización con IA para negocios chilenos.
-Tu objetivo: explicar qué es USAIA, sus planes y beneficios, y derivar a Matías para cerrar.
-
+      const PLANES_USAIA = `
 === PLANES USAIA ===
-• *Starter* — $39.000/mes + $50.000 configuración (pago único)
-  - Bot con IA 24/7
-  - Hasta 500 conversaciones/mes
-  - Catálogo manual de productos
-  - Panel de administración
-  - Historial de conversaciones
-  - NO incluye: Bsale, Google Calendar, campañas masivas
+• *Starter* — $39.000/mes + $50.000 configuración (único)
+  ✅ Bot IA 24/7, hasta 500 conversaciones/mes, catálogo manual, panel admin
+  ❌ Sin Bsale, sin Google Calendar, sin campañas
 
-• *Pro* — $89.000/mes + $80.000 configuración (pago único)
-  - Bot con IA 24/7
-  - Conversaciones ilimitadas
-  - Integración Bsale en tiempo real (stock y precios)
-  - Google Calendar (agendamiento de citas)
-  - Gestión de pedidos completa
-  - Campañas masivas de WhatsApp
-  - CRM y métricas en tiempo real
-  - Links de pago automáticos
+• *Pro* — $89.000/mes + $80.000 configuración (único)
+  ✅ Conversaciones ilimitadas, Bsale en tiempo real, Google Calendar,
+     pedidos, campañas masivas, CRM, métricas, links de pago automáticos
 
 • *Empresarial* — precio a cotizar
-  - Todo del plan Pro
-  - Múltiples números de WhatsApp
-  - Integraciones personalizadas
-  - Flujos a medida
-  - Capacitación del equipo
-  - Soporte prioritario
+  ✅ Todo Pro + múltiples números, integraciones a medida, soporte prioritario
 
-=== DATOS DE CONTACTO ===
-📱 WhatsApp Matías: wa.me/56999269035
-🌐 Web: usaiahoy.cl
+📱 Contacto Matías: wa.me/56999269035
+🌐 usaiahoy.cl`.trim();
 
-=== REGLAS ===
-- Responde siempre como USAIA, no como otro negocio
-- Si preguntan por productos/precios de otra tienda, aclara que esto es una demo de USAIA
-- Si quieren agendar o contratar, derivalos a Matías
-- Sé breve, directo y profesional
-- Si el cliente quiere "probar el bot", invítalo a preguntar por un producto de ejemplo
-      `.trim();
+      // Si el mensaje parece búsqueda de producto → buscar en Bsale real para demostrar
+      const pareceBusqueda = texto.length > 2 &&
+        !/usaia|plan|precio|starter|pro|empresarial|contratar|agendar|info|cuesta|vale|cobras/i.test(texto);
+
+      let ctxDemo = '';
+      if (pareceBusqueda) {
+        const bsaleCtx = await obtenerContextoBsale(texto, false, telefono, nombre, config).catch(() => null);
+        if (bsaleCtx) {
+          ctxDemo = `[DEMO EN VIVO — resultado real desde Bsale]:\n${bsaleCtx}\n\n` +
+            `👆 Así respondería tu bot en tiempo real. Esto es el catálogo de un cliente real conectado a Bsale.\n\n${PLANES_USAIA}`;
+        } else {
+          ctxDemo = `El producto "${texto}" no está en el catálogo de demo, pero en tu negocio el bot buscaría en tu propio Bsale.\n\n${PLANES_USAIA}`;
+        }
+      } else {
+        ctxDemo = PLANES_USAIA;
+      }
+
+      const USAIA_CONTEXTO = `Eres el asistente de demostración de USAIA (usaiahoy.cl).
+Tu objetivo: mostrar cómo funciona el bot y explicar los planes. Sé breve y directo.
+Si preguntan por un plan, explica qué incluye. Si quieren contratar, deriva a Matías.
+NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
 
       const historialUsaia = historialPrevio.map(m => ({ rol: m.rol, mensaje: m.mensaje }));
-      const respDemo = await geminiService.generarRespuesta(texto, historialUsaia, USAIA_CONTEXTO, telefono, {
+      const respDemo = await geminiService.generarRespuesta(texto, historialUsaia, USAIA_CONTEXTO + '\n\n' + ctxDemo, telefono, {
         empresa: { nombre: 'USAIA', web: 'usaiahoy.cl' },
         tipoNegocio: 'servicios',
-        asistentes: ['USAIA'],
+        asistentes: ['Bot USAIA'],
         credenciales: {},
         mayorista: {},
         garantia: {},
