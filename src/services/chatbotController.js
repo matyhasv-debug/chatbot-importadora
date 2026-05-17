@@ -289,19 +289,68 @@ async function procesarMensaje(data) {
     if (!texto && !mediaInfo) return;
 
     // ── Demo USAIA: responder con info del servicio cuando alguien llega desde la web ──
-    if (texto && /usaia/i.test(texto)) {
-      const msgDemo =
-        `¡Hola! 👋 Soy un bot de *USAIA* en acción.\n\n` +
-        `Pruébame — pregúntame por un producto, un precio o simula un pedido. Así es como respondería el bot de *tu* negocio.\n\n` +
-        `📦 *Planes disponibles:*\n` +
-        `• *Starter* — $39.000/mes (hasta 500 conversaciones)\n` +
-        `• *Pro* — $89.000/mes (ilimitado + Bsale + citas + campañas)\n` +
-        `• *Empresarial* — a medida\n\n` +
-        `¿Quieres más info o agendar una llamada?\n` +
-        `📱 Escríbele a Matías: wa.me/56999269035`;
-      await enviarMensaje(telefono, msgDemo, whatsappPhoneId, whatsappToken);
+    const historialPrevio = obtenerHistorial(telefono, tenantId, 10);
+    const esDemoUSAIA = /usaia/i.test(texto) ||
+      historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje));
+
+    if (texto && esDemoUSAIA) {
+      const USAIA_CONTEXTO = `
+Eres el bot de demostración de USAIA (usaiahoy.cl), un sistema de automatización con IA para negocios chilenos.
+Tu objetivo: explicar qué es USAIA, sus planes y beneficios, y derivar a Matías para cerrar.
+
+=== PLANES USAIA ===
+• *Starter* — $39.000/mes + $50.000 configuración (pago único)
+  - Bot con IA 24/7
+  - Hasta 500 conversaciones/mes
+  - Catálogo manual de productos
+  - Panel de administración
+  - Historial de conversaciones
+  - NO incluye: Bsale, Google Calendar, campañas masivas
+
+• *Pro* — $89.000/mes + $80.000 configuración (pago único)
+  - Bot con IA 24/7
+  - Conversaciones ilimitadas
+  - Integración Bsale en tiempo real (stock y precios)
+  - Google Calendar (agendamiento de citas)
+  - Gestión de pedidos completa
+  - Campañas masivas de WhatsApp
+  - CRM y métricas en tiempo real
+  - Links de pago automáticos
+
+• *Empresarial* — precio a cotizar
+  - Todo del plan Pro
+  - Múltiples números de WhatsApp
+  - Integraciones personalizadas
+  - Flujos a medida
+  - Capacitación del equipo
+  - Soporte prioritario
+
+=== DATOS DE CONTACTO ===
+📱 WhatsApp Matías: wa.me/56999269035
+🌐 Web: usaiahoy.cl
+
+=== REGLAS ===
+- Responde siempre como USAIA, no como otro negocio
+- Si preguntan por productos/precios de otra tienda, aclara que esto es una demo de USAIA
+- Si quieren agendar o contratar, derivalos a Matías
+- Sé breve, directo y profesional
+- Si el cliente quiere "probar el bot", invítalo a preguntar por un producto de ejemplo
+      `.trim();
+
+      const historialUsaia = historialPrevio.map(m => ({ rol: m.rol, mensaje: m.mensaje }));
+      const respDemo = await geminiService.generarRespuesta(texto, historialUsaia, USAIA_CONTEXTO, telefono, {
+        empresa: { nombre: 'USAIA', web: 'usaiahoy.cl' },
+        tipoNegocio: 'servicios',
+        asistentes: ['USAIA'],
+        credenciales: {},
+        mayorista: {},
+        garantia: {},
+        embalajes: [],
+      });
+
+      await enviarMensaje(telefono, respDemo, whatsappPhoneId, whatsappToken);
       guardarMensaje(telefono, nombre, 'user', texto, tenantId);
-      guardarMensaje(telefono, nombre, 'assistant', msgDemo, tenantId);
+      guardarMensaje(telefono, nombre, 'assistant', respDemo, tenantId);
       return;
     }
 
