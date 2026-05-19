@@ -356,7 +356,7 @@ async function procesarMensaje(data) {
           `👤 Cliente: ${nombre} (${telefono})\n` +
           `🆔 RUT: ${rutGuardado}\n` +
           `📋 Solicitud: ${descripcion}\n\n` +
-          `_Demo generada por USAIA · usaiahoy.cl_`;
+          `_Demo generada por USAIA · usaiahoy.com_`;
         await enviarMensaje(NOTIF_DEMO, notif, whatsappPhoneId, whatsappToken).catch(() => {});
         return;
       }
@@ -384,7 +384,7 @@ async function procesarMensaje(data) {
           `👤 Cliente: ${nombre} (${telefono})\n` +
           `🆔 RUT: ${rutGuardado}\n` +
           `📋 Trámite: ${opcion}\n\n` +
-          `_Demo generada por USAIA · usaiahoy.cl_`;
+          `_Demo generada por USAIA · usaiahoy.com_`;
         await enviarMensaje(NOTIF_DEMO, notif, whatsappPhoneId, whatsappToken).catch(() => {});
         return;
       }
@@ -413,7 +413,7 @@ async function procesarMensaje(data) {
 • *Empresarial* — precio a cotizar
   ✅ Todo Pro + múltiples números · flujos a medida · soporte prioritario
 
-📱 Habla con Matías: wa.me/56999269035 · 🌐 usaiahoy.cl`;
+📱 Habla con Matías: wa.me/56999269035 · 🌐 usaiahoy.com`;
 
       const esInicioDemo = /usaia/i.test(texto);
       const pareceBusqueda = !esInicioDemo && texto.length > 2 &&
@@ -458,13 +458,13 @@ async function procesarMensaje(data) {
         }
       }
 
-      const USAIA_CONTEXTO = `Eres el asistente de demostración de USAIA (usaiahoy.cl). Sé breve y directo.
+      const USAIA_CONTEXTO = `Eres el asistente de demostración de USAIA (usaiahoy.com). Sé breve y directo.
 Si preguntan por un plan, explica qué incluye. Si quieren contratar, deriva a Matías (wa.me/56999269035).
 NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
 
       const historialUsaia = historialPrevio.map(m => ({ rol: m.rol, mensaje: m.mensaje }));
       const respDemo = await geminiService.generarRespuesta(texto, historialUsaia, USAIA_CONTEXTO + '\n\n' + ctxDemo, telefono, {
-        empresa: { nombre: 'USAIA', web: 'usaiahoy.cl' },
+        empresa: { nombre: 'USAIA', web: 'usaiahoy.com' },
         tipoNegocio: 'servicios',
         asistentes: ['Bot USAIA'],
         credenciales: {},
