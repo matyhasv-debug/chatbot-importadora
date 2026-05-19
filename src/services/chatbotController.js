@@ -365,18 +365,30 @@ async function procesarMensaje(data) {
           `✅ *Solicitud recibida.*\n\n` +
           `📋 *Trámite:* ${opcion}\n` +
           `🆔 *RUT:* ${rutGuardado}\n\n` +
-          `El contador te contactará a la brevedad. ¡Gracias! 😊`;
+          `El contador revisará tu solicitud y te contactará a la brevedad. ¡Gracias! 😊`;
         await enviarMensaje(telefono, msgConfirm, whatsappPhoneId, whatsappToken);
         guardarMensaje(telefono, nombre, 'assistant', msgConfirm, tenantId);
         setEtapa(telefono, tenantId, 'explorando');
 
         await enviarMensaje(NOTIF_DEMO,
-          `📬 *NUEVA SOLICITUD — Empresa Contable X*\n\n` +
+          `📬 *NOTIFICACIÓN AL CONTADOR — Empresa Contable X*\n\n` +
+          `👆 En el sistema real, este mensaje llegaría al celular de Edgar al instante.\n\n` +
           `👤 Cliente: ${nombre} (${telefono})\n` +
           `🆔 RUT: ${rutGuardado}\n` +
-          `📋 Trámite: ${opcion}\n\n` +
+          `📋 Trámite solicitado: ${opcion}\n\n` +
+          `Edgar vería esto y sabría exactamente qué necesita el cliente, sin preguntar nada.\n\n` +
           `_Demo USAIA · usaiahoy.com_`,
           whatsappPhoneId, whatsappToken).catch(() => {});
+
+        // Recordatorio automático al cliente 2 minutos después
+        setTimeout(async () => {
+          const msgRecordatorio =
+            `⏰ *Recordatorio automático — Empresa Contable X*\n\n` +
+            `Hola ${nombre} 👋 Tu solicitud de *${opcion}* está siendo revisada por el contador.\n\n` +
+            `En un negocio real este mensaje se enviaría automáticamente según los plazos configurados — sin que el contador haga nada.\n\n` +
+            `_Automatización por USAIA · usaiahoy.com_`;
+          await enviarMensaje(telefono, msgRecordatorio, whatsappPhoneId, whatsappToken).catch(() => {});
+        }, 2 * 60 * 1000);
         return;
       }
 
@@ -392,6 +404,16 @@ async function procesarMensaje(data) {
         await enviarMensaje(telefono, msgConfirm, whatsappPhoneId, whatsappToken);
         guardarMensaje(telefono, nombre, 'assistant', msgConfirm, tenantId);
         setEtapa(telefono, tenantId, 'explorando');
+
+        // Recordatorio automático también para opción libre
+        setTimeout(async () => {
+          const msgRecordatorio =
+            `⏰ *Recordatorio automático — Empresa Contable X*\n\n` +
+            `Hola ${nombre} 👋 Tu solicitud está siendo revisada por el contador.\n\n` +
+            `En un negocio real este mensaje se enviaría automáticamente según los plazos configurados — sin que el contador haga nada.\n\n` +
+            `_Automatización por USAIA · usaiahoy.com_`;
+          await enviarMensaje(telefono, msgRecordatorio, whatsappPhoneId, whatsappToken).catch(() => {});
+        }, 2 * 60 * 1000);
 
         await enviarMensaje(NOTIF_DEMO,
           `📬 *NUEVA SOLICITUD — Empresa Contable X*\n\n` +
