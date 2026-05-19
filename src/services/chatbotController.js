@@ -296,31 +296,33 @@ async function procesarMensaje(data) {
 
     if (texto && esDemoContable) {
       const NOTIF_DEMO = '56999269035'; // tu número para probar
-      const yaIngresóRut = historialPrevio.some(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
-      const yaEligióOpción = historialPrevio.some(m =>
-        /factura|certificado|iva|renta|otro|solicitud recibida/i.test(m.mensaje) && m.rol === 'assistant'
-      );
+      const yaIngresóRut  = historialPrevio.some(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
+      const esperandoOtro = historialPrevio.some(m => /cuéntame con más detalle/i.test(m.mensaje) && m.rol === 'assistant');
+      const yaEligióOpción = historialPrevio.some(m => /solicitud recibida/i.test(m.mensaje) && m.rol === 'assistant');
 
-      // Detectar si el texto actual es un RUT
       const rutMatch = texto.match(/(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK])/);
+
+      // Recuperar RUT del historial para usarlo en pasos siguientes
+      const msgConRut   = historialPrevio.find(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
+      const rutGuardado = msgConRut?.mensaje?.match(/(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK])/)?.[1] || 'sin RUT';
 
       guardarMensaje(telefono, nombre, 'user', texto, tenantId);
 
+      // Paso 1: bienvenida
       if (/demo\s*contable/i.test(texto) && !yaIngresóRut) {
-        // Paso 1: bienvenida
         const msg = `👋 Bienvenido a *Empresa Contable X* _(demo de automatización por USAIA)_\n\nSoy el asistente virtual de la oficina. Para atenderte, por favor ingresa tu *RUT* (ej: 12.345.678-9).`;
         await enviarMensaje(telefono, msg, whatsappPhoneId, whatsappToken);
         guardarMensaje(telefono, nombre, 'assistant', msg, tenantId);
         return;
       }
 
-      if (rutMatch && !yaEligióOpción) {
-        // Paso 2: RUT recibido → simular verificación SII
+      // Paso 2: RUT recibido → verificar SII (simulado) + mostrar menú
+      if (rutMatch && !yaEligióOpción && !esperandoOtro) {
         const rut = rutMatch[1];
         const nombresDemo = ['Juan Pérez García', 'María González López', 'Carlos Rodríguez Muñoz', 'Ana Martínez Soto'];
-        const nombreDemo = nombresDemo[Math.floor(Math.random() * nombresDemo.length)];
+        const nombreDemo  = nombresDemo[Math.floor(Math.random() * nombresDemo.length)];
         const actividades = ['Comercio al por menor', 'Servicios profesionales', 'Construcción y obras', 'Transporte y logística'];
-        const actividad = actividades[Math.floor(Math.random() * actividades.length)];
+        const actividad   = actividades[Math.floor(Math.random() * actividades.length)];
 
         const msg =
           `🔍 Verificando en SII...\n\n` +
@@ -332,26 +334,51 @@ async function procesarMensaje(data) {
           `1️⃣ Solicitar factura\n` +
           `2️⃣ Certificado tributario SII\n` +
           `3️⃣ Consulta IVA o Renta\n` +
-          `4️⃣ Otro`;
+          `4️⃣ Finiquito laboral\n` +
+          `5️⃣ Otro — cuéntame qué necesitas`;
         await enviarMensaje(telefono, msg, whatsappPhoneId, whatsappToken);
         guardarMensaje(telefono, nombre, 'assistant', msg, tenantId);
         return;
       }
 
-      if (yaIngresóRut && !yaEligióOpción && /^[1-4]$|factura|certificado|iva|renta|otro/i.test(texto)) {
-        // Paso 3: eligió opción → confirmar y notificar
-        const opciones = {
-          '1': 'Solicitar factura', 'factura': 'Solicitar factura',
-          '2': 'Certificado tributario SII', 'certificado': 'Certificado tributario SII',
-          '3': 'Consulta IVA o Renta', 'iva': 'Consulta IVA o Renta', 'renta': 'Consulta IVA o Renta',
-          '4': 'Otro', 'otro': 'Otro',
-        };
-        const clave = texto.trim().toLowerCase();
-        const opcion = opciones[clave] || 'Otra consulta';
+      // Paso 3a: eligió "Otro" (opción 5) → pedir descripción libre
+      if (yaIngresóRut && !yaEligióOpción && !esperandoOtro && /^5$|^otro$/i.test(texto.trim())) {
+        const msg = `Claro 😊 Cuéntame con más detalle qué necesitas y lo registro para que el contador te contacte.`;
+        await enviarMensaje(telefono, msg, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msg, tenantId);
+        return;
+      }
 
-        // Recuperar RUT del historial
-        const msgConRut = historialPrevio.find(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
-        const rutGuardado = msgConRut?.mensaje?.match(/(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK])/)?.[1] || 'sin RUT';
+      // Paso 3b: recibió descripción libre (después de "Otro") → confirmar y notificar
+      if (esperandoOtro && !yaEligióOpción) {
+        const descripcion = texto.slice(0, 200);
+        const msgConfirm =
+          `✅ *Solicitud recibida.*\n\n` +
+          `📋 *Detalle:* ${descripcion}\n` +
+          `🆔 *RUT:* ${rutGuardado}\n\n` +
+          `El contador revisará tu caso y te contactará a la brevedad. ¡Gracias! 😊`;
+        await enviarMensaje(telefono, msgConfirm, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msgConfirm, tenantId);
+
+        const notif =
+          `📬 *NUEVA SOLICITUD — Empresa Contable X*\n\n` +
+          `👤 Cliente: ${nombre} (${telefono})\n` +
+          `🆔 RUT: ${rutGuardado}\n` +
+          `📋 Solicitud: ${descripcion}\n\n` +
+          `_Demo generada por USAIA · usaiahoy.cl_`;
+        await enviarMensaje(NOTIF_DEMO, notif, whatsappPhoneId, whatsappToken).catch(() => {});
+        return;
+      }
+
+      // Paso 3c: eligió opción 1-4 → confirmar y notificar
+      if (yaIngresóRut && !yaEligióOpción && /^[1-4]$|factura|certificado|iva|renta|finiquito/i.test(texto)) {
+        const opciones = {
+          '1': 'Solicitar factura',           'factura':     'Solicitar factura',
+          '2': 'Certificado tributario SII',  'certificado': 'Certificado tributario SII',
+          '3': 'Consulta IVA o Renta',        'iva':         'Consulta IVA o Renta', 'renta': 'Consulta IVA o Renta',
+          '4': 'Finiquito laboral',           'finiquito':   'Finiquito laboral',
+        };
+        const opcion = opciones[texto.trim().toLowerCase()] || opciones[texto.trim()] || 'Otra consulta';
 
         const msgConfirm =
           `✅ *Solicitud recibida.*\n\n` +
@@ -361,7 +388,6 @@ async function procesarMensaje(data) {
         await enviarMensaje(telefono, msgConfirm, whatsappPhoneId, whatsappToken);
         guardarMensaje(telefono, nombre, 'assistant', msgConfirm, tenantId);
 
-        // Notificación real al número de prueba
         const notif =
           `📬 *NUEVA SOLICITUD — Empresa Contable X*\n\n` +
           `👤 Cliente: ${nombre} (${telefono})\n` +
@@ -372,8 +398,8 @@ async function procesarMensaje(data) {
         return;
       }
 
-      // Cualquier otro mensaje en modo contable → respuesta genérica
-      const msgGenerico = `Por favor ingresa tu *RUT* para comenzar, o escribe *1, 2, 3 o 4* para elegir tu trámite. 😊`;
+      // Fallback
+      const msgGenerico = `Por favor ingresa tu *RUT* para comenzar, o elige una opción del *1 al 5*. 😊`;
       await enviarMensaje(telefono, msgGenerico, whatsappPhoneId, whatsappToken);
       guardarMensaje(telefono, nombre, 'assistant', msgGenerico, tenantId);
       return;
