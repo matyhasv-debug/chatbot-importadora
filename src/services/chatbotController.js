@@ -296,7 +296,7 @@ async function procesarMensaje(data) {
       etapaActual.startsWith('demo_contable');
 
     if (texto && esDemoContable) {
-      const NOTIF_DEMO = '56999269035';
+      const NOTIF_DEMO = '56940629970'; // Edgar
       guardarMensaje(telefono, nombre, 'user', texto, tenantId);
       registrarCliente(telefono, nombre, tenantId);
 
