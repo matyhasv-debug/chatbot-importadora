@@ -288,8 +288,98 @@ async function procesarMensaje(data) {
 
     if (!texto && !mediaInfo) return;
 
-    // ── Demo USAIA: responder con info del servicio cuando alguien llega desde la web ──
+    // ── Demo Contable: flujo simulado de oficina contable para prospectos ────────
     const historialPrevio = obtenerHistorial(telefono, tenantId, 10);
+
+    const esDemoContable = /demo\s*contable/i.test(texto) ||
+      historialPrevio.some(m => /demo\s*contable|Empresa Contable X/i.test(m.mensaje));
+
+    if (texto && esDemoContable) {
+      const NOTIF_DEMO = '56999269035'; // tu número para probar
+      const yaIngresóRut = historialPrevio.some(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
+      const yaEligióOpción = historialPrevio.some(m =>
+        /factura|certificado|iva|renta|otro|solicitud recibida/i.test(m.mensaje) && m.rol === 'assistant'
+      );
+
+      // Detectar si el texto actual es un RUT
+      const rutMatch = texto.match(/(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK])/);
+
+      guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+
+      if (/demo\s*contable/i.test(texto) && !yaIngresóRut) {
+        // Paso 1: bienvenida
+        const msg = `👋 Bienvenido a *Empresa Contable X* _(demo de automatización por USAIA)_\n\nSoy el asistente virtual de la oficina. Para atenderte, por favor ingresa tu *RUT* (ej: 12.345.678-9).`;
+        await enviarMensaje(telefono, msg, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msg, tenantId);
+        return;
+      }
+
+      if (rutMatch && !yaEligióOpción) {
+        // Paso 2: RUT recibido → simular verificación SII
+        const rut = rutMatch[1];
+        const nombresDemo = ['Juan Pérez García', 'María González López', 'Carlos Rodríguez Muñoz', 'Ana Martínez Soto'];
+        const nombreDemo = nombresDemo[Math.floor(Math.random() * nombresDemo.length)];
+        const actividades = ['Comercio al por menor', 'Servicios profesionales', 'Construcción y obras', 'Transporte y logística'];
+        const actividad = actividades[Math.floor(Math.random() * actividades.length)];
+
+        const msg =
+          `🔍 Verificando en SII...\n\n` +
+          `✅ *RUT verificado:* ${rut}\n` +
+          `👤 *Contribuyente:* ${nombreDemo}\n` +
+          `🏢 *Actividad:* ${actividad}\n` +
+          `📋 *Estado tributario:* Al día\n\n` +
+          `Hola *${nombreDemo.split(' ')[0]}*, ¿qué necesitas hoy?\n\n` +
+          `1️⃣ Solicitar factura\n` +
+          `2️⃣ Certificado tributario SII\n` +
+          `3️⃣ Consulta IVA o Renta\n` +
+          `4️⃣ Otro`;
+        await enviarMensaje(telefono, msg, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msg, tenantId);
+        return;
+      }
+
+      if (yaIngresóRut && !yaEligióOpción && /^[1-4]$|factura|certificado|iva|renta|otro/i.test(texto)) {
+        // Paso 3: eligió opción → confirmar y notificar
+        const opciones = {
+          '1': 'Solicitar factura', 'factura': 'Solicitar factura',
+          '2': 'Certificado tributario SII', 'certificado': 'Certificado tributario SII',
+          '3': 'Consulta IVA o Renta', 'iva': 'Consulta IVA o Renta', 'renta': 'Consulta IVA o Renta',
+          '4': 'Otro', 'otro': 'Otro',
+        };
+        const clave = texto.trim().toLowerCase();
+        const opcion = opciones[clave] || 'Otra consulta';
+
+        // Recuperar RUT del historial
+        const msgConRut = historialPrevio.find(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
+        const rutGuardado = msgConRut?.mensaje?.match(/(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK])/)?.[1] || 'sin RUT';
+
+        const msgConfirm =
+          `✅ *Solicitud recibida.*\n\n` +
+          `📋 *Trámite:* ${opcion}\n` +
+          `🆔 *RUT:* ${rutGuardado}\n\n` +
+          `El contador te contactará a la brevedad. ¡Gracias! 😊`;
+        await enviarMensaje(telefono, msgConfirm, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msgConfirm, tenantId);
+
+        // Notificación real al número de prueba
+        const notif =
+          `📬 *NUEVA SOLICITUD — Empresa Contable X*\n\n` +
+          `👤 Cliente: ${nombre} (${telefono})\n` +
+          `🆔 RUT: ${rutGuardado}\n` +
+          `📋 Trámite: ${opcion}\n\n` +
+          `_Demo generada por USAIA · usaiahoy.cl_`;
+        await enviarMensaje(NOTIF_DEMO, notif, whatsappPhoneId, whatsappToken).catch(() => {});
+        return;
+      }
+
+      // Cualquier otro mensaje en modo contable → respuesta genérica
+      const msgGenerico = `Por favor ingresa tu *RUT* para comenzar, o escribe *1, 2, 3 o 4* para elegir tu trámite. 😊`;
+      await enviarMensaje(telefono, msgGenerico, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', msgGenerico, tenantId);
+      return;
+    }
+
+    // ── Demo USAIA: responder con info del servicio cuando alguien llega desde la web ──
     const esDemoUSAIA = /usaia/i.test(texto) ||
       historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje));
 
