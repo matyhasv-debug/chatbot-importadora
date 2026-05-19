@@ -316,21 +316,12 @@ async function procesarMensaje(data) {
         return;
       }
 
-      // Paso 2: RUT recibido → verificar SII (simulado) + mostrar menú
+      // Paso 2: RUT recibido → registrar y mostrar menú
       if (rutMatch && !yaEligióOpción && !esperandoOtro) {
         const rut = rutMatch[1];
-        const nombresDemo = ['Juan Pérez García', 'María González López', 'Carlos Rodríguez Muñoz', 'Ana Martínez Soto'];
-        const nombreDemo  = nombresDemo[Math.floor(Math.random() * nombresDemo.length)];
-        const actividades = ['Comercio al por menor', 'Servicios profesionales', 'Construcción y obras', 'Transporte y logística'];
-        const actividad   = actividades[Math.floor(Math.random() * actividades.length)];
-
         const msg =
-          `🔍 Verificando en SII...\n\n` +
-          `✅ *RUT verificado:* ${rut}\n` +
-          `👤 *Contribuyente:* ${nombreDemo}\n` +
-          `🏢 *Actividad:* ${actividad}\n` +
-          `📋 *Estado tributario:* Al día\n\n` +
-          `Hola *${nombreDemo.split(' ')[0]}*, ¿qué necesitas hoy?\n\n` +
+          `✅ *RUT registrado:* ${rut}\n\n` +
+          `¿Qué necesitas hoy?\n\n` +
           `1️⃣ Solicitar factura\n` +
           `2️⃣ Certificado tributario SII\n` +
           `3️⃣ Consulta IVA o Renta\n` +
