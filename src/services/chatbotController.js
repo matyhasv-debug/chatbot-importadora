@@ -296,7 +296,7 @@ async function procesarMensaje(data) {
 
     if (texto && esDemoContable) {
       const NOTIF_DEMO = '56999269035'; // tu número para probar
-      const yaIngresóRut  = historialPrevio.some(m => /\d{7,8}-[\dkK]/.test(m.mensaje));
+      const yaIngresóRut  = historialPrevio.some(m => /\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]|\d{7,8}-[\dkK]/.test(m.mensaje));
       const esperandoOtro = historialPrevio.some(m => /cuéntame con más detalle/i.test(m.mensaje) && m.rol === 'assistant');
       const yaEligióOpción = historialPrevio.some(m => /solicitud recibida/i.test(m.mensaje) && m.rol === 'assistant');
 
