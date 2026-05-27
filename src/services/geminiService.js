@@ -200,8 +200,10 @@ function buildReglas(cfg, nombreAsistente) {
 
   // Regla de inventario adaptada
   const reglaInventario = esTienda
-    ? `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"`
-    : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"`;
+    ? `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"
+- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.`
+    : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"
+- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.`;
 
   return `
 === QUIÉN ERES ===
@@ -386,12 +388,14 @@ El cliente busca: "${producto}"
 
 Genera 3-5 términos cortos que un sistema de inventario chileno podría usar para este producto.
 REGLAS:
+- Corrige errores ortográficos/tipográficos antes de generar variantes (ej: "estan" → "estante", "estanteria", "secadra" → "secadora")
 - Prefiere palabras cortas y genéricas (1-2 palabras) que aparecen en nombres de catálogo
 - Incluye siempre la palabra principal del producto (ej: "estante", "hervidor", "lámpara")
 - Si la palabra principal tiene variante de género en español, inclúyela (ej: "secadora" → también "secador", "aspiradora" → también "aspirador")
 - Evita adjetivos descriptivos del cliente (plegable, recargable, multicolor) salvo que sean parte del nombre del producto
 Responde SOLO con los términos separados por coma, sin explicación.
 Ejemplo para "secadora de ropa portatil": "secadora, secador, secadora ropa, secador ropa, secadora portatil"
+Ejemplo para "estan plegables": "estante, estante plegable, estantería, repisa, rack"
 Ejemplo para "estante plegable multicolor": "estante, estante metalico, estantería, repisa"`;
 
   try {
