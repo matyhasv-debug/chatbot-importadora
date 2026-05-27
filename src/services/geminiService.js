@@ -221,6 +221,7 @@ ${reglaInventario}
 - Si el mensaje es ambiguo, responde brevemente y pregunta en qué puedes ayudar.
 - CRÍTICO anti-loop: Si el cliente dijo "no", "no gracias", "no por ahora" a una oferta concreta, NO repitas esa misma oferta. Pregunta en qué más puedes ayudar o despídete amablemente. Nunca insistas más de una vez con el mismo producto.
 - CRÍTICO anti-repetición: Si tu último mensaje ya preguntaba "¿Hay algo más en lo que pueda ayudarte?" o "¿En qué más puedo ayudarte?" y el cliente responde "No" o "No, gracias", despídete con "¡Hasta luego! 😊 Cuando necesites algo, aquí estamos." y NO vuelvas a hacer la misma pregunta.
+- CRÍTICO anti-loop verificar: NUNCA repitas "Déjame verificar y te confirmo en un momento" si ya lo dijiste antes. Si el cliente insiste en comprar o ya confirmó lo que quiere, procede con el resumen del pedido directamente.
 - NUNCA digas "tomaré nota", "anotaré esto", "coordinaré con el courier" o "tu pedido está siendo procesado/despachado" — no tienes esa capacidad técnica. Si el cliente da datos de envío, responde que los recibirá el equipo y se contactarán. Si pregunta por estado de despacho, indícale que contacte directamente.
 - NUNCA confirmes que un pedido está en despacho si el cliente NO ha enviado comprobante de pago en esta conversación.
 - CRÍTICO: No trabajamos con pago contra entrega. Si el cliente dice "pago cuando llegue", "pago contra entrega" o "pago al recibir el pedido", respóndele con cortesía, algo como: "Entendido 😊 Lamentablemente no manejamos pago contra entrega. El proceso es: realizas la transferencia primero y una vez confirmada coordinamos el despacho. El valor del envío sí se paga directo al courier al recibir. ¿Te acomodo así?" — siempre amable, sin rechazarlo.
@@ -363,6 +364,10 @@ async function detectarIntencion(mensaje, historialDB = []) {
   if (/quiero (matricularme|inscribirme|postular|anotarme|reservar mi cupo)|iniciar.*(matrícula|inscripción|postulación)|cómo (me matriculo|me inscribo|postulo|pago la matr[íi]cula)|pagar.*(matr[íi]cula|inscripción|arancel)|reservar cupo/i.test(mensaje)) return 'INICIAR_MATRICULA';
   // Soporte técnico: cliente ya tiene el producto y necesita ayuda para usarlo
   if (/c[oó]mo.*(funciona|se usa|configur|conect|instala|enciend|activ|empezar|empiezo|usarlo|usar)|no s[eé] (c[oó]mo|usarlo|cómo usar)|paso.*seguir|pasos.*usar|tutorial|manual.*uso|ayuda.*usar/i.test(mensaje)) return 'SOPORTE_TECNICO';
+  // Querer comprar con cantidad explícita → HACER_PEDIDO directo
+  if (/\b(quiero|dame|necesito|me\s+llevo|separa|aparta)\b.{0,30}\b(uno|una|\d+\s*unidades?|\d+\s*u\.?)\b/i.test(mensaje)) return 'HACER_PEDIDO';
+  // "promo de X" / "en X unidades" / "por X unidades" → precio mayorista
+  if (/\b(promo|precio).{0,15}\b\d+\b|\b\d+\s*unidades?\b|\bpor\s+\d+\b/i.test(mensaje)) return 'PRECIO_MAYORISTA';
   // Afirmaciones cortas solas: nunca disparar compra, dejar que el contexto las maneje
   if (/^(si+|sii+|s[ií]|ok|dale|listo|claro|bueno|perfecto|de acuerdo|ta bien|ta bueno|ya po|ya|por fa|por favor|porfa)[\s!.,¡¿]*$/i.test(mensaje.trim())) return 'CONFIRMAR';
   if (/\b(ir[eé]|voy|paso|pasar[eé]|me aparezco|vengo|ir\s*al?)\b.{0,25}\b(tienda|local|ah[ií]|all[aá]|buscar|retirar)\b|\b(retiro|recojo|busco)\b.{0,25}\b(tienda|local|personal|directo|yo\s*mismo)\b|\b(voy\s+a\s+ir|paso\s+(m[aá]s\s+tarde|mañana|hoy|luego|en\s+un\s+rato)|ir[eé]\s+(m[aá]s\s+tarde|mañana|hoy|luego|en\s+un\s+rato)|voy\s+en\s+un\s+rato|voy\s+para\s+all[aá]|paso\s+despu[eé]s)\b/i.test(mensaje)) return 'RETIRO_TIENDA';
