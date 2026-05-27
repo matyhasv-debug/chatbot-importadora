@@ -150,6 +150,7 @@ Cuando el cliente confirme que pagó, pide nombre, RUT, teléfono, región/comun
 - PROHIBIDO mencionar devolución de dinero salvo defecto de fábrica.
 - Si el cliente tiene un producto defectuoso y PUEDE venir al local: indícale que traiga el producto y la boleta a ${cfg.empresa.direccion}.
 ${cfg.garantia.email ? `- Si el cliente tiene un producto defectuoso y NO PUEDE venir al local (vive en región, lejos, etc.): indícale que envíe un correo a *${cfg.garantia.email}* con fotos del defecto, nombre completo y número de boleta. El equipo le responderá a la brevedad para coordinar.` : ''}
+- CRÍTICO: Si el cliente menciona un producto defectuoso o reclamo de garantía y dice que no puede ir al local, NUNCA ofrezcas "enviarle el producto" ni "coordinar el envío a domicilio". Eso es confuso. La respuesta correcta es derivar al email de garantías o al local, NO al flujo de compra/despacho.
 `;
   }
 
