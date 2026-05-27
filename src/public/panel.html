@@ -293,6 +293,17 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       </div>
     </div>
 
+    <!-- Fuente del catálogo -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🗂️ Fuente del catálogo de productos</div>
+      <select id="cfg-modo-catalogo" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="bsale">Bsale (integración automática)</option>
+        <option value="manual">Manual (agrego productos desde el panel)</option>
+        <option value="pdf">PDF (subo mi catálogo en PDF)</option>
+      </select>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">Define cómo el bot busca productos. "Manual" usa la tabla de catálogo del panel. "PDF" usa el documento que subas abajo.</p>
+    </div>
+
     <!-- Catálogo PDF -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">📄 Catálogo en PDF</div>
@@ -1196,11 +1207,17 @@ async function cargarFollowUps() {
 }
 
 function conectarSSE() {
+  let sseURL;
   if (ES_CLIENTE) {
-    $('live-txt').textContent = 'En vivo';
-    return;
+    if (_useJWT) {
+      sseURL = API + '/eventos?token=' + encodeURIComponent(_token);
+    } else {
+      sseURL = API + '/eventos' + (_key ? '?key=' + _key : '');
+    }
+  } else {
+    sseURL = '/panel/eventos';
   }
-  const es = new EventSource('/panel/eventos');
+  const es = new EventSource(sseURL);
   es.onopen = () => { $('live-txt').textContent = 'En vivo'; };
   es.onerror = () => { $('live-txt').textContent = 'Reconectando...'; };
   es.onmessage = e => {
@@ -1594,6 +1611,7 @@ async function abrirConfigPanel() {
         document.getElementById('cfg-google-client-id').value     = data.google_client_id || '';
         document.getElementById('cfg-google-client-secret').value = '';
         document.getElementById('cfg-google-calendar-id').value   = data.google_calendar_id === 'primary' ? '' : (data.google_calendar_id || '');
+        if (data.modo_catalogo) document.getElementById('cfg-modo-catalogo').value = data.modo_catalogo;
         const gStatus = document.getElementById('cfg-google-status');
         if (data.google_conectado) {
           gStatus.textContent = '✅ Google Calendar conectado';
@@ -2079,6 +2097,7 @@ async function guardarConfigPanel() {
     panel_titulo:                   document.getElementById('cfg-panel-titulo')?.value.trim() || '',
     panel_logo_url:                 document.getElementById('cfg-panel-logo')?.value.trim() || '',
     panel_color:                    document.getElementById('cfg-panel-color')?.value || '#1D4ED8',
+    modo_catalogo:                  document.getElementById('cfg-modo-catalogo')?.value || 'bsale',
     google_client_id:               document.getElementById('cfg-google-client-id')?.value.trim() || '',
     google_client_secret:           document.getElementById('cfg-google-client-secret')?.value.trim() || '',
     google_calendar_id:             document.getElementById('cfg-google-calendar-id')?.value.trim() || 'primary',

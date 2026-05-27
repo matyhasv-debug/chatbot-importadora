@@ -19,10 +19,11 @@ const JWT_SECRET = process.env.JWT_SECRET || (() => {
 
 // ─── Helper: verificar auth cliente (JWT o key legacy) ───────────────────────
 function verificarAuthCliente(req, res, tenant) {
+  // JWT: header o query param (SSE no puede enviar headers)
   const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (token) {
-    try { jwt.verify(token, JWT_SECRET); return true; }
+  const rawToken = auth.startsWith('Bearer ') ? auth.slice(7) : (req.query.token || null);
+  if (rawToken) {
+    try { jwt.verify(rawToken, JWT_SECRET); return true; }
     catch (_) { res.status(401).json({ ok: false, error: 'Token inválido' }); return false; }
   }
   // Si el tenant tiene credenciales configuradas, siempre requiere JWT
@@ -74,10 +75,37 @@ try {
 
 // ─── SSE clients ──────────────────────────────────────────────────────────────
 const sseClients = new Set();
+const sseClientesByTenant = new Map(); // tenantId -> Set<res>
+
+// Cache phone→tenantId para evitar query en cada evento
+const _tenantPorTelefono = new Map();
+function _getTenantIdPorTelefono(telefono) {
+  const c = _tenantPorTelefono.get(telefono);
+  if (c && Date.now() - c.ts < 5 * 60 * 1000) return c.v;
+  const row = db.prepare(`SELECT tenant_id FROM conversaciones WHERE telefono = ? ORDER BY creado_en DESC LIMIT 1`).get(telefono);
+  const v = row?.tenant_id || null;
+  _tenantPorTelefono.set(telefono, { v, ts: Date.now() });
+  return v;
+}
+
 function emitirEvento(tipo, datos) {
   const payload = `data: ${JSON.stringify({ tipo, ...datos })}\n\n`;
+  // Admin panel (ve todo)
   for (const res of sseClients) {
     try { res.write(payload); } catch (_) { sseClients.delete(res); }
+  }
+  // Tenant panels (solo los suyos)
+  if (sseClientesByTenant.size > 0) {
+    const telefono = datos.mensaje?.telefono || datos.telefono || null;
+    if (telefono) {
+      const tenantId = _getTenantIdPorTelefono(telefono);
+      if (tenantId) {
+        const set = sseClientesByTenant.get(tenantId);
+        if (set) for (const res of set) {
+          try { res.write(payload); } catch (_) { set.delete(res); }
+        }
+      }
+    }
   }
 }
 
@@ -201,6 +229,38 @@ router.get('/eventos', verificarAdmin, (req, res) => {
     try { res.write(': ping\n\n'); } catch (_) { clearInterval(ping); }
   }, 25000);
   req.on('close', () => { sseClients.delete(res); clearInterval(ping); });
+});
+
+// ─── SSE por tenant (panel cliente) ──────────────────────────────────────────
+router.get('/:slug/api/eventos', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).end();
+  if (!verificarAuthCliente(req, res, tenant)) return;
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  if (!sseClientesByTenant.has(tenant.id)) sseClientesByTenant.set(tenant.id, new Set());
+  sseClientesByTenant.get(tenant.id).add(res);
+
+  // Enviar estado inicial (humanosActivos del tenant)
+  const humanosDelTenant = [...modoHumano].filter(tel => {
+    const row = db.prepare(`SELECT tenant_id FROM clientes WHERE telefono = ?`).get(tel);
+    return row?.tenant_id === tenant.id;
+  });
+  res.write(`data: ${JSON.stringify({ tipo: 'init', humanosActivos: humanosDelTenant })}\n\n`);
+
+  const ping = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch (_) { clearInterval(ping); }
+  }, 25000);
+  req.on('close', () => {
+    sseClientesByTenant.get(tenant.id)?.delete(res);
+    clearInterval(ping);
+  });
 });
 
 // ─── API admin: mensajes ──────────────────────────────────────────────────────
@@ -717,7 +777,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
