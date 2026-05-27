@@ -201,9 +201,11 @@ function buildReglas(cfg, nombreAsistente) {
   // Regla de inventario adaptada
   const reglaInventario = esTienda
     ? `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"
-- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.`
+- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.
+- CRÍTICO variante no encontrada: Si el catálogo tiene productos similares pero no la variante exacta que el cliente pide (ej: hay "estantes metálicos" pero el cliente preguntó "estante plegable"), NO digas "no tenemos esa variante". Di: "No encontré esa variante específica, pero sí tenemos [producto disponible]. ¿Te interesa ver las opciones?"`
     : `- NUNCA inventes precios ni disponibilidad. Si no está en el catálogo, di claramente: "No encontré ese producto en nuestro catálogo en este momento 😕 ¿Buscas otro producto?"
-- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.`;
+- NUNCA digas "tampoco tenemos X" ni "no tenemos X en stock" si no está escrito explícitamente en el [CATÁLOGO] de este mensaje. Solo puedes afirmar ausencia de lo que buscaste en esta consulta, no de otros productos.
+- CRÍTICO variante no encontrada: Si el catálogo tiene productos similares pero no la variante exacta que el cliente pide (ej: hay "estantes metálicos" pero el cliente preguntó "estante plegable"), NO digas "no tenemos esa variante". Di: "No encontré esa variante específica, pero sí tenemos [producto disponible]. ¿Te interesa ver las opciones?"`;
 
   return `
 === QUIÉN ERES ===
