@@ -293,6 +293,13 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       </div>
     </div>
 
+    <!-- Email de garantía remota -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">📩 Email para garantías remotas</div>
+      <input id="cfg-garantia-email" type="email" placeholder="garantias@tuempresa.com" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);box-sizing:border-box">
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">Cuando un cliente tenga un producto defectuoso y no pueda ir al local, el bot le indicará que envíe las fotos a este correo.</p>
+    </div>
+
     <!-- Fuente del catálogo -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">🗂️ Fuente del catálogo de productos</div>
@@ -1612,6 +1619,7 @@ async function abrirConfigPanel() {
         document.getElementById('cfg-google-client-secret').value = '';
         document.getElementById('cfg-google-calendar-id').value   = data.google_calendar_id === 'primary' ? '' : (data.google_calendar_id || '');
         if (data.modo_catalogo) document.getElementById('cfg-modo-catalogo').value = data.modo_catalogo;
+        document.getElementById('cfg-garantia-email').value = data.garantia_email || '';
         const gStatus = document.getElementById('cfg-google-status');
         if (data.google_conectado) {
           gStatus.textContent = '✅ Google Calendar conectado';
@@ -2098,6 +2106,7 @@ async function guardarConfigPanel() {
     panel_logo_url:                 document.getElementById('cfg-panel-logo')?.value.trim() || '',
     panel_color:                    document.getElementById('cfg-panel-color')?.value || '#1D4ED8',
     modo_catalogo:                  document.getElementById('cfg-modo-catalogo')?.value || 'bsale',
+    garantia_email:                 document.getElementById('cfg-garantia-email')?.value.trim() || '',
     google_client_id:               document.getElementById('cfg-google-client-id')?.value.trim() || '',
     google_client_secret:           document.getElementById('cfg-google-client-secret')?.value.trim() || '',
     google_calendar_id:             document.getElementById('cfg-google-calendar-id')?.value.trim() || 'primary',

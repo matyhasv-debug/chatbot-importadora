@@ -66,6 +66,7 @@ function buildConfig(tenant) {
     garantia: {
       meses:     tenant.garantia_meses,
       condicion: tenant.garantia_cond,
+      email:     tenant.garantia_email || '',
     },
     credenciales: {
       bsaleToken:      tenant.bsale_token,

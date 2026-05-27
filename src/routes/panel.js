@@ -483,7 +483,7 @@ router.put('/api/tenants/:id/config', express.json(), (req, res) => {
     const tenant = db.prepare(`SELECT id FROM tenants WHERE id = ?`).get(req.params.id);
     if (!tenant) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
 
-    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','prompt_extra','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
+    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','garantia_email','prompt_extra','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
     const updates = [];
     const vals    = [];
     for (const c of campos) {
@@ -777,7 +777,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo, garantia_email FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
