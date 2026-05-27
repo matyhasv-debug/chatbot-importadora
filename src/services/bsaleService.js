@@ -64,12 +64,19 @@ function generarVariantesBusqueda(query) {
   for (const g of varianteGenero(q))     variantes.add(g);
 
   // Agregar cada palabra significativa por separado (>3 chars) para ampliar búsqueda
-  for (const p of palabras) {
-    if (p.length > 3) {
-      variantes.add(p);
-      for (const s of procesarSingulares(p)) variantes.add(s);
-      for (const g of varianteGenero(p))     variantes.add(g);
-    }
+  const STOP_WORDS = new Set(['para', 'con', 'sin', 'los', 'las', 'del', 'una', 'unos', 'unas', 'por', 'mas', 'más']);
+  const palabrasSignificativas = palabras.filter(p => p.length > 3 && !STOP_WORDS.has(p));
+  for (const p of palabrasSignificativas) {
+    variantes.add(p);
+    for (const s of procesarSingulares(p)) variantes.add(s);
+    for (const g of varianteGenero(p))     variantes.add(g);
+  }
+
+  // Para queries de 3+ palabras significativas, agregar combinaciones de las primeras dos
+  // y de la primera con la tercera — cubre nombres como "proyector portátil consola"
+  if (palabrasSignificativas.length >= 3) {
+    variantes.add(`${palabrasSignificativas[0]} ${palabrasSignificativas[1]}`);
+    variantes.add(`${palabrasSignificativas[0]} ${palabrasSignificativas[2]}`);
   }
 
   return [...variantes];

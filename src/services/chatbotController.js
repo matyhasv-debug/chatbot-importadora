@@ -668,8 +668,17 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
     }
 
     if (payload === 'mas_info') {
-      const historial2 = obtenerHistorial(telefono, tenantId);
-      const respuesta = await geminiService.generarRespuesta('tengo más dudas', historial2, '', telefono, config);
+      const historial2  = obtenerHistorial(telefono, tenantId);
+      const ultimoProd  = await geminiService.extraerProductoConIA('', historial2);
+      const ctxMasInfo  = ultimoProd
+        ? await obtenerContextoBsale(ultimoProd, false, telefono, nombre, config).catch(() => null)
+        : null;
+      const respuesta = await geminiService.generarRespuesta(
+        'el cliente quiere más información sobre el producto',
+        historial2,
+        ctxMasInfo || '',
+        telefono, config
+      );
       await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
       guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
       return;
