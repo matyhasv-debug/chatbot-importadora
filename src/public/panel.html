@@ -87,6 +87,8 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
 .contact{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);border-left:3px solid transparent;transition:all .12s}
 .contact:hover{background:var(--surf2)}
 .contact.sel{background:var(--accent-light);border-left-color:var(--accent)}
+.contact.contact-humano{border-left-color:#ef4444;background:#fff5f5}
+.contact.contact-humano:hover{background:#fee2e2}
 .c-row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
 .c-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
 .c-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
@@ -667,17 +669,20 @@ function renderContactos() {
     list.innerHTML = '<div class="empty" style="padding:40px 0"><div class="empty-icon">🔍</div><p>Sin resultados</p></div>';
     return;
   }
-  list.innerHTML = cs.map(c => {
+  // Ordenar: primero los que piden atención humana
+  const ordenados = [...cs].sort((a, b) => (b.modo_humano ? 1 : 0) - (a.modo_humano ? 1 : 0));
+  list.innerHTML = ordenados.map(c => {
     const s = ESTADOS[c.estado] || ESTADOS.en_conversacion;
     const sel = c.telefono === telefonoActivo ? 'sel' : '';
     const tagsHTML = (c.tags || []).slice(0, 3).map(t => `<span class="tag-mini" style="background:${esc(t.color)}">${esc(t.tag)}</span>`).join('');
-    return `<div class="contact ${sel}" onclick="seleccionar('${c.telefono}','${(c.nombre || '').replace(/'/g, "\\'")}','${c.estado || 'en_conversacion'}')">
+    const humBadge = c.modo_humano ? `<span class="badge" style="background:#ef4444;color:#fff;margin-left:4px">🙋 Pide atención</span>` : '';
+    return `<div class="contact ${sel}${c.modo_humano ? ' contact-humano' : ''}" onclick="seleccionar('${c.telefono}','${(c.nombre || '').replace(/'/g, "\\'")}','${c.estado || 'en_conversacion'}')">
       <div class="c-row1">
         <span class="c-name">${esc(c.nombre || 'Sin nombre')}</span>
         <span class="c-time">${fmt(c.ultimo_mensaje)}</span>
       </div>
       <div class="c-phone">${c.telefono}${tagsHTML}</div>
-      <span class="badge ${s.cls}">${s.e} ${s.label}</span>
+      <span class="badge ${s.cls}">${s.e} ${s.label}</span>${humBadge}
     </div>`;
   }).join('');
 }
@@ -1215,8 +1220,19 @@ function conectarSSE() {
       cargarContactos(); cargarStats();
     }
     if (data.tipo === 'modo_humano') {
-      if (data.activo) humanosActivos.add(data.telefono);
-      else humanosActivos.delete(data.telefono);
+      if (data.activo) {
+        humanosActivos.add(data.telefono);
+        // Notificación visual: parpadeo del título del tab
+        let _parpadeos = 0;
+        const _titOrig = document.title;
+        const _intv = setInterval(() => {
+          document.title = _parpadeos % 2 === 0 ? '🙋 ¡Cliente espera atención!' : _titOrig;
+          if (++_parpadeos >= 10) { clearInterval(_intv); document.title = _titOrig; }
+        }, 700);
+        toast('🙋 ' + (data.telefono) + ' solicita atención humana', '#ef4444');
+      } else {
+        humanosActivos.delete(data.telefono);
+      }
       if (data.telefono === telefonoActivo) { humanActivo = data.activo; actualizarModoHumano(data.activo); }
       cargarContactos();
     }

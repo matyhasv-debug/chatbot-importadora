@@ -1,5 +1,5 @@
 // src/services/chatbotController.js
-const { emitirEvento, esModoHumano, actualizarEstadoCliente } = require('../routes/panel');
+const { emitirEvento, esModoHumano, setModoHumano, actualizarEstadoCliente } = require('../routes/panel');
 const db              = require('../config/database');
 const geminiService   = require('./geminiService');
 const bsaleService    = require('./bsaleService');
@@ -569,12 +569,29 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
       return;
     }
 
-    // Cliente pide hablar con una persona → notificar al dueño y pausar bot
+    // Cliente pide hablar con una persona → notificar al dueño, pausar bot y auto-reanudar en 30 min
     if (/hablar con (una? )?(persona|humano|alguien|encargado|dueño|vendedor|asesor)|necesito (un )?humano|quiero (un )?asesor|atención (humana|personal)|no (quiero|me gusta) (hablar con )?(el |un )?bot/i.test(texto)) {
-      await notificarDueno('solicitud_humano', telefono, nombre, `El cliente solicitó hablar con una persona. Último mensaje: "${texto}"`, config);
-      const respHumano = `Entendido 😊 Ya avisé a nuestro equipo. Un(a) asesor(a) de *${empresa.nombre}* te contactará a la brevedad en este mismo chat.\n\n📍 También puedes visitarnos en ${empresa.direccion}\n🕐 ${empresa.horario}`;
+      guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+      setModoHumano(telefono, true, tenantId);
+
+      // Resumen de los últimos 6 mensajes para el dueño
+      const histResumen = obtenerHistorial(telefono, tenantId, 6);
+      const resumenTexto = histResumen.map(m => `${m.rol === 'user' ? '👤' : '🤖'} ${m.mensaje.slice(0, 120)}`).join('\n');
+      const notifMsg = `El cliente solicitó hablar con una persona.\nÚltimo mensaje: "${texto}"\n\n📋 *Últimos mensajes:*\n${resumenTexto}`;
+      await notificarDueno('solicitud_humano', telefono, nombre, notifMsg, config);
+
+      const respHumano = `Entendido 😊 Ya avisé a un(a) asesor(a) de *${empresa.nombre}*. Te responderán en este mismo chat a la brevedad.\n\n📍 También puedes visitarnos en *${empresa.direccion}*\n🕐 ${empresa.horario}`;
       await enviarMensaje(telefono, respHumano, whatsappPhoneId, whatsappToken);
       guardarMensaje(telefono, nombre, 'assistant', respHumano, tenantId);
+
+      // Auto-reanudar bot después de 30 minutos si nadie lo reactivó manualmente
+      setTimeout(() => {
+        if (esModoHumano(telefono)) {
+          setModoHumano(telefono, false, tenantId);
+          console.log(`[BOT] ⏰ Auto-reanudado bot para ${telefono} (30 min sin atención humana)`);
+        }
+      }, 30 * 60 * 1000);
+
       return;
     }
 
