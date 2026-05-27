@@ -569,6 +569,24 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
       return;
     }
 
+    // Cliente quiere cancelar o cambiar su cita → notificar al dueño
+    if (/cancelar?\s*(mi\s*)?(cita|hora|turno|reserva)|anular?\s*(mi\s*)?(cita|hora)|no (puedo|voy a) (ir|asistir)|cambiar?\s*(mi\s*)?(cita|hora|turno)|reagendar?|mover?\s*(mi\s*)?(cita|hora)/i.test(texto)) {
+      guardarMensaje(telefono, nombre, 'user', texto, tenantId);
+      // Cancelar en BD la cita más próxima del cliente
+      try {
+        db.prepare(`UPDATE citas SET estado='cancelada', cancelada_en=datetime('now') WHERE telefono=? AND tenant_id=? AND estado='confirmada' AND fecha >= date('now') ORDER BY fecha ASC LIMIT 1`).run(telefono, tenantId);
+      } catch(_) {}
+      // Cancelar el recordatorio pendiente
+      try {
+        db.prepare(`UPDATE seguimientos SET enviado=1 WHERE telefono=? AND tenant_id=? AND tipo='recordatorio_cita' AND enviado=0`).run(telefono, tenantId);
+      } catch(_) {}
+      await notificarDueno('solicitud_humano', telefono, nombre, `El cliente quiere cancelar o cambiar su cita. Mensaje: "${texto}"`, config);
+      const respCancel = `Entendido 😊 Ya avisé al equipo sobre tu solicitud. Te contactaremos a la brevedad para coordinar.\n\n¿Tienes alguna otra fecha en mente? Con gusto te ayudo a reagendar.`;
+      await enviarMensaje(telefono, respCancel, whatsappPhoneId, whatsappToken);
+      guardarMensaje(telefono, nombre, 'assistant', respCancel, tenantId);
+      return;
+    }
+
     // Cliente pide hablar con una persona → notificar al dueño, pausar bot y auto-reanudar en 30 min
     if (/hablar con (una? )?(persona|humano|alguien|encargado|dueño|vendedor|asesor)|necesito (un )?humano|quiero (un )?asesor|atención (humana|personal)|no (quiero|me gusta) (hablar con )?(el |un )?bot/i.test(texto)) {
       guardarMensaje(telefono, nombre, 'user', texto, tenantId);
@@ -1190,6 +1208,10 @@ Explica que el equipo académico se contactará a la brevedad para completar la 
             respuesta = `✅ *¡Cita confirmada!*\n\n📅 ${fechaFormateada}\n⏰ ${datosExtraidos.hora || '10:00'} hrs\n📋 ${datosExtraidos.servicio || 'Consulta'}${googleLink}\n\nTe esperamos, ${nombre}. Si necesitas cambiar la hora avísanos 😊`;
 
             await notificarDueno('cita_agendada', telefono, nombre, `📅 ${fechaFormateada} · ${datosExtraidos.hora || '10:00'} · ${datosExtraidos.servicio || 'Consulta'}`, config);
+
+            // Programar recordatorio 24h antes
+            const fechaHoraCita = new Date(`${datosExtraidos.fecha}T${(datosExtraidos.hora || '10:00')}:00-03:00`);
+            followUpService.programarRecordatorioCita(telefono, tenantId, datosExtraidos.servicio || 'Consulta', fechaHoraCita.toISOString(), datosExtraidos.hora || '10:00');
           } else {
             respuesta = `Para agendar tu cita, por favor dime:\n📅 ¿Qué día prefieres?\n⏰ ¿A qué hora?\n\nPor ejemplo: _"quiero el martes 20 a las 15:00"_`;
           }

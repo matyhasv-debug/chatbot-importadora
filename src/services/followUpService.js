@@ -83,11 +83,50 @@ const MENSAJES_DEFAULT = {
   pago_recordatorio: [
     `Hola {{nombre}} 👋 Notamos que aún no hemos recibido tu comprobante de transferencia.\n\n¿Necesitas los datos bancarios de nuevo? Con gusto te los envío 💳`,
   ],
+  recordatorio_cita: [
+    `🔔 Hola {{nombre}}, te recordamos tu cita de mañana:\n\n📋 *{{servicio}}*\n📅 {{fecha_display}}\n⏰ {{hora}} hrs\n\nSi necesitas cancelar o cambiar el horario, avísanos con anticipación 😊 ¡Te esperamos!`,
+  ],
 };
 
+// ─── Programar recordatorio de cita en fecha exacta ──────────────────────────
+function programarRecordatorioCita(telefono, tenantId, servicio, fechaISO, hora) {
+  try {
+    // Enviar 24h antes de la cita
+    const fechaCita   = new Date(fechaISO);
+    const enviarEn    = new Date(fechaCita.getTime() - 24 * 60 * 60 * 1000);
+    if (enviarEn <= new Date()) {
+      console.log(`[FollowUp] ⏭️  Recordatorio de cita ya pasó para ${telefono}`);
+      return;
+    }
+    const datosJson = JSON.stringify({ servicio, fecha: fechaISO, hora });
+    db.prepare(`
+      INSERT INTO seguimientos (telefono, tipo, enviar_en, tenant_id, datos_json)
+      VALUES (?, 'recordatorio_cita', ?, ?, ?)
+    `).run(telefono, enviarEn.toISOString(), tenantId, datosJson);
+    console.log(`[FollowUp] 📅 Recordatorio cita para ${telefono} el ${enviarEn.toISOString()}`);
+  } catch (err) {
+    console.error('[FollowUp] Error programando recordatorio cita:', err.message);
+  }
+}
+
 // ─── Generar mensajes de seguimiento según tipo ───────────────────────────────
-function generarMensaje(tipo, telefono, nombre = '', tenantId = null) {
+function generarMensaje(tipo, telefono, nombre = '', tenantId = null, datosJson = null) {
   const primerNombre = (nombre || 'amigo').split(' ')[0];
+
+  // Para recordatorio_cita, usar datos guardados en la BD
+  if (tipo === 'recordatorio_cita' && datosJson) {
+    try {
+      const d = typeof datosJson === 'string' ? JSON.parse(datosJson) : datosJson;
+      const fechaObj    = new Date(d.fecha);
+      const fechaDisplay = fechaObj.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
+      const plantilla   = MENSAJES_DEFAULT.recordatorio_cita[0];
+      return plantilla
+        .replace(/\{\{nombre\}\}/g,       primerNombre)
+        .replace(/\{\{servicio\}\}/g,     d.servicio || 'tu cita')
+        .replace(/\{\{fecha_display\}\}/g, fechaDisplay)
+        .replace(/\{\{hora\}\}/g,         d.hora || '');
+    } catch (_) {}
+  }
 
   // Buscar template personalizado del tenant
   if (tenantId) {
@@ -119,7 +158,7 @@ async function procesarSeguimientos(enviarMensajeFn) {
       ).get(seg.telefono, seg.tenant_id);
       const nombre = cliente?.nombre || '';
 
-      const mensaje = generarMensaje(seg.tipo, seg.telefono, nombre, seg.tenant_id);
+      const mensaje = generarMensaje(seg.tipo, seg.telefono, nombre, seg.tenant_id, seg.datos_json);
 
       // Usar las credenciales del tenant correcto (del JOIN en obtenerPendientes)
       await enviarMensajeFn(seg.telefono, mensaje, seg.whatsapp_phone_id, seg.whatsapp_token);
@@ -149,6 +188,7 @@ async function procesarSeguimientos(enviarMensajeFn) {
 
 module.exports = {
   programarSeguimiento,
+  programarRecordatorioCita,
   cancelarSeguimientos,
   obtenerPendientes,
   generarMensaje,

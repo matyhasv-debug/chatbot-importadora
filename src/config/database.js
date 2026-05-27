@@ -207,6 +207,8 @@ const migraciones = [
     creado_en       DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS idx_citas_tenant ON citas(tenant_id, fecha)`,
+  `ALTER TABLE seguimientos ADD COLUMN datos_json TEXT`,
+  `ALTER TABLE citas ADD COLUMN cancelada_en DATETIME`,
 ];
 
 for (const sql of migraciones) {
