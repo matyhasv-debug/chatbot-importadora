@@ -1094,7 +1094,8 @@ Si el cliente pregunta si puede comprar online y retirar hoy: responde que puede
 📍 Dirección: ${empresa.direccion}
 🕐 Horario: ${empresa.horario}
 ${empresa.domingos ? '✅ Abierto los domingos' : '❌ Cerrado los domingos'}
-INSTRUCCIÓN CRÍTICA: Confirma que puede pasar a retirar en ese horario. NO des datos bancarios ni menciones transferencia. NO digas que "coordinarás" nada. Solo di que te espera en la tienda y que al llegar puede pagar y retirar.`;
+INSTRUCCIÓN CRÍTICA: Confirma que puede pasar a retirar en ese horario. NO des datos bancarios ni menciones transferencia. NO digas que "coordinarás" nada. Solo di que lo esperamos en la tienda y que al llegar puede pagar y retirar.
+PROHIBIDO DECIR: "estamos preparando tu pedido", "lo tenemos listo", "lo guardamos", "quedará apartado" o cualquier frase que implique reserva. El producto NO está separado. Por la alta demanda, el stock no se garantiza sin pago previo. Si el cliente quiere asegurar disponibilidad, sugiere pagar antes de venir.`;
         respuesta = await geminiService.generarRespuesta(texto, historial, ctxRetiro, telefono, config);
         break;
       }
