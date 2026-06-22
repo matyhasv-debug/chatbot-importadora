@@ -210,6 +210,7 @@ const migraciones = [
   `ALTER TABLE seguimientos ADD COLUMN datos_json TEXT`,
   `ALTER TABLE tenants ADD COLUMN garantia_email TEXT DEFAULT ''`,
   `ALTER TABLE citas ADD COLUMN cancelada_en DATETIME`,
+  `ALTER TABLE clientes ADD COLUMN modo_humano_hasta DATETIME`,
 ];
 
 for (const sql of migraciones) {

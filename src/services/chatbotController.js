@@ -248,9 +248,10 @@ function detectarObjecionPrecio(texto) {
 function buscarEnListaEmbalaje(query, embalajes = []) {
   if (!query) return null;
   const q = query.toLowerCase().trim();
-  return embalajes.find(p =>
-    p.nombre.toLowerCase().includes(q) || q.includes(p.nombre.toLowerCase().split(' ')[0])
-  ) || null;
+  return embalajes.find(p => {
+    const nombre = p.nombre.toLowerCase();
+    return nombre.includes(q) || q.includes(nombre);
+  }) || null;
 }
 
 function formatearEmbalaje(prod) {
@@ -262,8 +263,19 @@ function formatearEmbalaje(prod) {
   );
 }
 
-// ─── Procesador principal ─────────────────────────────────────────────────────
+// ─── Cola por teléfono: evita llamadas IA paralelas para el mismo cliente ─────
+const _colaMensajes = new Map();
+
 async function procesarMensaje(data) {
+  const clave = `${data.telefono}_${data.phoneNumberId}`;
+  const anterior = _colaMensajes.get(clave) ?? Promise.resolve();
+  const actual = anterior.then(() => _procesarMensaje(data)).catch(() => {});
+  _colaMensajes.set(clave, actual);
+  await actual;
+  if (_colaMensajes.get(clave) === actual) _colaMensajes.delete(clave);
+}
+
+async function _procesarMensaje(data) {
   const { telefono, nombre, texto: textoOriginal, payload, tipo, mediaInfo, phoneNumberId } = data;
   const texto = (payload || textoOriginal || '').trim();
 
@@ -276,6 +288,15 @@ async function procesarMensaje(data) {
   const { whatsappPhoneId, whatsappToken } = config.credenciales;
 
   try {
+
+    // Expirar modo humano si ya pasó el plazo (sobrevive reinicios del servidor)
+    try {
+      const exp = db.prepare(`SELECT modo_humano_hasta FROM clientes WHERE telefono = ? AND tenant_id = ?`).get(telefono, tenantId);
+      if (exp?.modo_humano_hasta && new Date(exp.modo_humano_hasta) <= new Date()) {
+        setModoHumano(telefono, false, tenantId);
+        console.log(`[BOT] ⏰ Modo humano expirado para ${telefono}`);
+      }
+    } catch (_) {}
 
     if (esModoHumano(telefono)) {
       console.log(`[BOT] ⏸️  Modo humano activo para ${telefono} — bot pausado`);
@@ -591,6 +612,10 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
     if (/hablar con (una? )?(persona|humano|alguien|encargado|dueño|vendedor|asesor)|necesito (un )?humano|quiero (un )?asesor|atención (humana|personal)|no (quiero|me gusta) (hablar con )?(el |un )?bot/i.test(texto)) {
       guardarMensaje(telefono, nombre, 'user', texto, tenantId);
       setModoHumano(telefono, true, tenantId);
+      // Guardar expiración en DB para que sobreviva reinicios del servidor
+      try {
+        db.prepare(`UPDATE clientes SET modo_humano_hasta = datetime('now', '+30 minutes') WHERE telefono = ? AND tenant_id = ?`).run(telefono, tenantId);
+      } catch (_) {}
 
       // Resumen de los últimos 6 mensajes para el dueño
       const histResumen = obtenerHistorial(telefono, tenantId, 6);
@@ -862,10 +887,15 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
         const producto   = await geminiService.extraerProductoConIA(texto, historial);
         const encontrado = buscarEnListaEmbalaje(producto, embalajes);
         if (encontrado) {
-          respuesta =
-            `¡Claro! 📦 Aquí tienes la info de la caja:\n\n` +
-            formatearEmbalaje(encontrado) +
-            `\n\n⚠️ Para consultas sobre colores, modelos o fotos visita ${config.empresa.web}\n\n¿Te gustaría apartar esta caja? Te doy los datos de pago 😊`;
+          // Obtener precio unitario real de Bsale para mostrar junto al precio de caja
+          const bsaleCtx = await obtenerContextoBsale(producto, false, telefono, nombre, config);
+          const infoEmbalaje = formatearEmbalaje(encontrado);
+          contextoExtra = [
+            bsaleCtx || '',
+            `=== PRECIO POR CAJA CERRADA ===\n${infoEmbalaje}`,
+            `INSTRUCCIÓN: Muestra primero el precio unitario de Bsale (precio normal de venta). Luego muestra el precio por caja cerrada. Aclara que la caja requiere comprar las ${encontrado.unidades} unidades completas.`,
+          ].filter(Boolean).join('\n\n');
+          respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
           setEtapa(telefono, tenantId, 'cotizando');
           followUpService.programarSeguimiento(telefono, 'follow_up_precio', 240, tenantId);
         } else {
@@ -942,7 +972,7 @@ Luego pregunta: "¿Confirmamos? 😊" — NO des datos bancarios todavía.`;
         const ultimaBotMsg = historial.filter(m => m.rol === 'assistant').slice(-1)[0]?.mensaje || '';
         const eraConfirmPedido = /confirmamos\?|¿lo sep[ao]r[ao]|hacemos el pedido|quieres comprar|¿confirmás|confirmas\?/i.test(ultimaBotMsg);
         if (etapa === 'cotizando' && eraConfirmPedido) {
-          intent = 'CONFIRMAR_PEDIDO'; // caer al case de abajo
+          // cae al case CONFIRMAR_PEDIDO por fallthrough
         } else {
           respuesta = await geminiService.generarRespuesta(texto, historial, contextoExtra, telefono, config);
           break;
@@ -1231,6 +1261,11 @@ Explica que el equipo académico se contactará a la brevedad para completar la 
       case 'DESPEDIDA': {
         // Respuesta fija sin pasar por IA para evitar alucinaciones de confirmación de pedido
         respuesta = '¡Hasta luego! 👋 Cuando necesites algo más, aquí estamos 😊';
+        break;
+      }
+
+      case 'DESARROLLADOR': {
+        respuesta = 'Soy un asistente virtual con tecnología de IA 🤖 ¿En qué te puedo ayudar?';
         break;
       }
 

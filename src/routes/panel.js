@@ -112,8 +112,9 @@ function emitirEvento(tipo, datos) {
 // ─── Modo humano — persistido en BD para sobrevivir reinicios ─────────────────
 const modoHumano = new Set();
 
-// Restaurar conversaciones en modo humano al arrancar
+// Restaurar conversaciones en modo humano al arrancar (ignorar las ya expiradas)
 try {
+  db.prepare(`UPDATE clientes SET modo_humano = 0 WHERE modo_humano = 1 AND modo_humano_hasta IS NOT NULL AND modo_humano_hasta <= datetime('now')`).run();
   const activos = db.prepare(`SELECT telefono FROM clientes WHERE modo_humano = 1`).all();
   activos.forEach(c => modoHumano.add(c.telefono));
   if (activos.length > 0) {

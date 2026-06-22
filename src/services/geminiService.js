@@ -425,15 +425,6 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
     ? obtenerNombreAsistente(telefono, config.asistentes)
     : (config.asistentes?.[0] ?? 'Asistente');
 
-  const embalajesPrompt = (() => {
-    const embs = config.embalajes || [];
-    if (!embs.length) return '';
-    const lista = embs.map((p, i) =>
-      `${i + 1}. ${p.nombre} (Caja de ${p.unidades}u): $${p.precioUnitario.toLocaleString('es-CL')} c/u (Total caja: $${(p.totalCaja || p.precioUnitario * p.unidades).toLocaleString('es-CL')})`
-    ).join('\n');
-    return `\n=== CATÁLOGO EMBALAJE MAYORISTA (CAJA CERRADA) ===\nSOLO entregar si el cliente pregunta por caja, bulto o embalaje:\n${lista}`;
-  })();
-
   const tipo       = TIPOS_NEGOCIO[config.tipoNegocio] || TIPOS_NEGOCIO.tienda;
   const catalogoLbl = tipo.catalogoLbl;
 
@@ -447,7 +438,6 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
     `5. NUNCA muestres el menú como respuesta a una consulta específica.`,
     `\n${buildInfoTienda(config)}`,
     `\n${buildReglas(config, nombreAsistente)}`,
-    embalajesPrompt,
   ].join('\n');
 
   const messages = [{ role: 'system', content: systemPrompt }];
