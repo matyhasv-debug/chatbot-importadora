@@ -682,6 +682,10 @@ router.post('/:slug/api/responder', express.json(), async (req, res) => {
   if (!verificarAuthCliente(req, res, tenant)) return;
   const { telefono, mensaje } = req.body;
   if (!telefono || !mensaje) return res.status(400).json({ ok: false });
+  if (!tenant.whatsapp_phone_id || !tenant.whatsapp_token) {
+    console.error(`[Panel/${slug}] Faltan credenciales de WhatsApp — phone_id:${tenant.whatsapp_phone_id ? 'OK' : 'FALTA'} token:${tenant.whatsapp_token ? 'OK' : 'FALTA'}`);
+    return res.status(500).json({ ok: false, error: 'Tenant sin credenciales de WhatsApp configuradas (phone_id o token faltante)' });
+  }
   try {
     await axios.post(
       `https://graph.facebook.com/v18.0/${tenant.whatsapp_phone_id}/messages`,
@@ -693,7 +697,14 @@ router.post('/:slug/api/responder', express.json(), async (req, res) => {
     db.prepare(`INSERT INTO conversaciones (telefono, nombre, rol, mensaje, tenant_id) VALUES (?, ?, ?, ?, ?)`)
       .run(telefono, nombre, 'assistant', `[HUMANO] ${mensaje}`, tenant.id);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ ok: false, error: err.response?.data?.error?.message || err.message }); }
+  } catch (err) {
+    const fbError = err.response?.data?.error;
+    console.error(`[Panel/${slug}] Error enviando WhatsApp:`, JSON.stringify(fbError || err.message));
+    const detalle = fbError
+      ? `${fbError.message || 'Sin mensaje'} (type=${fbError.type || '?'} code=${fbError.code || '?'} subcode=${fbError.error_subcode || '?'})`
+      : err.message;
+    res.status(500).json({ ok: false, error: detalle });
+  }
 });
 
 // ─── Helper: enviar notificación WhatsApp al dueño ───────────────────────────
