@@ -789,7 +789,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo, garantia_email FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo, garantia_email, prompt_extra FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
@@ -800,7 +800,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo','google_client_id','google_client_secret','google_calendar_id'];
+  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo','google_client_id','google_client_secret','google_calendar_id','prompt_extra'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }

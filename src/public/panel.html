@@ -300,6 +300,13 @@ html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(
       <p style="font-size:11px;color:var(--muted);margin-top:6px">Cuando un cliente tenga un producto defectuoso y no pueda ir al local, el bot le indicará que envíe las fotos a este correo.</p>
     </div>
 
+    <!-- Instrucciones adicionales para el bot -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🤖 Instrucciones adicionales para el bot</div>
+      <textarea id="cfg-prompt-extra" rows="4" placeholder="Ej: El TV Box viene sin desbloquear ni con apps por defecto. Si el cliente lo quiere con la aplicación instalada o desbloqueado, tiene un cargo adicional de $2.000." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);box-sizing:border-box;font-family:inherit;resize:vertical"></textarea>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">Reglas de negocio o datos extra que el bot debe conocer al responder (precios de add-ons, condiciones especiales, etc).</p>
+    </div>
+
     <!-- Fuente del catálogo -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">🗂️ Fuente del catálogo de productos</div>
@@ -1620,6 +1627,7 @@ async function abrirConfigPanel() {
         document.getElementById('cfg-google-calendar-id').value   = data.google_calendar_id === 'primary' ? '' : (data.google_calendar_id || '');
         if (data.modo_catalogo) document.getElementById('cfg-modo-catalogo').value = data.modo_catalogo;
         document.getElementById('cfg-garantia-email').value = data.garantia_email || '';
+        document.getElementById('cfg-prompt-extra').value = data.prompt_extra || '';
         const gStatus = document.getElementById('cfg-google-status');
         if (data.google_conectado) {
           gStatus.textContent = '✅ Google Calendar conectado';
@@ -2107,6 +2115,7 @@ async function guardarConfigPanel() {
     panel_color:                    document.getElementById('cfg-panel-color')?.value || '#1D4ED8',
     modo_catalogo:                  document.getElementById('cfg-modo-catalogo')?.value || 'bsale',
     garantia_email:                 document.getElementById('cfg-garantia-email')?.value.trim() || '',
+    prompt_extra:                   document.getElementById('cfg-prompt-extra')?.value.trim() || '',
     google_client_id:               document.getElementById('cfg-google-client-id')?.value.trim() || '',
     google_client_secret:           document.getElementById('cfg-google-client-secret')?.value.trim() || '',
     google_calendar_id:             document.getElementById('cfg-google-calendar-id')?.value.trim() || 'primary',
