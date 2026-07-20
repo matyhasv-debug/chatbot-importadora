@@ -211,6 +211,14 @@ const migraciones = [
   `ALTER TABLE tenants ADD COLUMN garantia_email TEXT DEFAULT ''`,
   `ALTER TABLE citas ADD COLUMN cancelada_en DATETIME`,
   `ALTER TABLE clientes ADD COLUMN modo_humano_hasta DATETIME`,
+  `CREATE TABLE IF NOT EXISTS productos_no_reservables (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    nombre    TEXT NOT NULL,
+    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_no_reservables_tenant ON productos_no_reservables(tenant_id)`,
+  `ALTER TABLE tenants ADD COLUMN notif_email TEXT DEFAULT ''`,
 ];
 
 for (const sql of migraciones) {

@@ -5,17 +5,20 @@ const geminiService   = require('./geminiService');
 const bsaleService    = require('./bsaleService');
 const followUpService = require('./followUpService');
 const tenantService   = require('./tenantService');
-const { enviarMensaje, enviarMenu, enviarBotonesConfirmar, reenviarMedia } = require('./whatsappService');
+const { enviarMensaje, enviarMenu, enviarBotonesConfirmar, reenviarMedia, descargarMedia } = require('./whatsappService');
 const catalogoService = require('./catalogoService');
 const pdfService      = require('./pdfService');
 const pagoService     = require('./pagoService');
 const calendarService = require('./calendarService');
+const emailService    = require('./emailService');
 
 // ─── Notificación al dueño ────────────────────────────────────────────────────
-async function notificarDueno(tipo, telefono, nombre, extra = '', config = null) {
-  const DUENO_TEL = config?.credenciales?.notifTelefono || process.env.DUENO_WHATSAPP;
-  if (!DUENO_TEL) {
-    console.warn(`[Notif] ⚠️ Sin número de notificación configurado (tipo: ${tipo})`);
+// adjunto opcional: { filename, content: Buffer, mime } — se adjunta solo al email
+async function notificarDueno(tipo, telefono, nombre, extra = '', config = null, adjunto = null) {
+  const DUENO_TEL   = config?.credenciales?.notifTelefono || process.env.DUENO_WHATSAPP;
+  const DUENO_EMAIL = config?.credenciales?.notifEmail;
+  if (!DUENO_TEL && !DUENO_EMAIL) {
+    console.warn(`[Notif] ⚠️ Sin número ni correo de notificación configurado (tipo: ${tipo})`);
     return;
   }
 
@@ -32,12 +35,23 @@ async function notificarDueno(tipo, telefono, nombre, extra = '', config = null)
 
   const msg = mensajes[tipo] || `📬 *${tipo.toUpperCase()}*\nCliente: ${nombre} (${telefono})\n${extra}`;
 
-  try {
-    const { whatsappPhoneId, whatsappToken } = config?.credenciales || {};
-    await enviarMensaje(DUENO_TEL, msg, whatsappPhoneId, whatsappToken);
-    console.log(`[Notif] ✅ Notificación "${tipo}" enviada al dueño (${DUENO_TEL})`);
-  } catch (err) {
-    console.error(`[Notif] ❌ Error enviando notificación "${tipo}":`, err.message);
+  if (DUENO_TEL) {
+    try {
+      const { whatsappPhoneId, whatsappToken } = config?.credenciales || {};
+      await enviarMensaje(DUENO_TEL, msg, whatsappPhoneId, whatsappToken);
+      console.log(`[Notif] ✅ Notificación "${tipo}" enviada al dueño (${DUENO_TEL})`);
+    } catch (err) {
+      console.error(`[Notif] ❌ Error enviando notificación "${tipo}":`, err.message);
+    }
+  }
+
+  if (DUENO_EMAIL) {
+    try {
+      await emailService.enviarNotificacion(DUENO_EMAIL, tipo, msg.replace(/\*/g, ''), adjunto);
+      console.log(`[Notif] ✅ Email "${tipo}" enviado al dueño (${DUENO_EMAIL})`);
+    } catch (err) {
+      console.error(`[Notif] ❌ Error enviando email "${tipo}":`, err.message);
+    }
   }
 }
 
@@ -545,7 +559,14 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
       actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
       followUpService.cancelarSeguimientos(telefono, tenantId);
       console.log(`[BOT] 🧾 Comprobante recibido de ${telefono}`);
-      await notificarDueno('comprobante', telefono, nombre, '', config);
+      let adjuntoComprobante = null;
+      if (config?.credenciales?.notifEmail && mediaInfo.media_id) {
+        adjuntoComprobante = await descargarMedia(mediaInfo.media_id, whatsappPhoneId, whatsappToken).catch(err => {
+          console.error('[Notif] ❌ Error descargando comprobante para email:', err.message);
+          return null;
+        });
+      }
+      await notificarDueno('comprobante', telefono, nombre, '', config, adjuntoComprobante);
       // Reenviar el comprobante directamente al WhatsApp del dueño para que lo vea
       const dueno = config?.credenciales?.notifTelefono || process.env.DUENO_WHATSAPP;
       if (dueno && mediaInfo.media_id) {
@@ -557,17 +578,21 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
     // Imágenes/audio/video sin caption llegan como texto "[IMAGE]", "[AUDIO]", etc.
     const textoEsMedia = !texto || /^\[(IMAGE|AUDIO|VOICE|VIDEO|DOCUMENT|STICKER|LOCATION)\]$/.test(texto);
     if (textoEsMedia) {
+      const productoNoReservable = catalogoService.esNoReservable(tenantId, obtenerCarrito(telefono, tenantId) || '');
+      const msgComprobante = productoNoReservable
+        ? 'Gracias por el comprobante 🙏 Ese producto en particular es solo venta en tienda, sujeto a disponibilidad al momento de llegar — no manejamos reserva ni pago anticipado por WhatsApp para él. ¿Te ayudo con algo más?'
+        : '¡Comprobante recibido! 🧾 Lo revisaremos y coordinaremos tu pedido a la brevedad. ¿Necesitas algo más?';
       if (mediaInfo?.tipo === 'image') {
         // Si es imagen que puede ser comprobante, responder diferente
         if (detectarComprobante(data)) {
-          await enviarMensaje(telefono, '¡Comprobante recibido! 🧾 Lo revisaremos y coordinaremos tu pedido a la brevedad. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
+          await enviarMensaje(telefono, msgComprobante, whatsappPhoneId, whatsappToken);
         } else {
           await enviarMensaje(telefono, 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊', whatsappPhoneId, whatsappToken);
         }
       } else if (mediaInfo?.tipo === 'audio' || mediaInfo?.tipo === 'voice') {
         await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
       } else if (mediaInfo?.tipo === 'document') {
-        await enviarMensaje(telefono, '¡Comprobante recibido! 🧾 Lo revisaremos y coordinaremos tu pedido a la brevedad. ¿Necesitas algo más?', whatsappPhoneId, whatsappToken);
+        await enviarMensaje(telefono, msgComprobante, whatsappPhoneId, whatsappToken);
       }
       return;
     }

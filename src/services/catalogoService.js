@@ -87,4 +87,43 @@ function listarProductos(tenantId) {
   `).all(tenantId);
 }
 
-module.exports = { buscarProductos, formatearParaBot, agregarProducto, actualizarStock, listarProductos };
+/**
+ * Lista los productos marcados como "no reservables" (solo venta en tienda) de un tenant.
+ */
+function listarNoReservables(tenantId) {
+  return db.prepare(`
+    SELECT * FROM productos_no_reservables WHERE tenant_id = ? ORDER BY nombre
+  `).all(tenantId);
+}
+
+function agregarNoReservable(tenantId, nombre) {
+  return db.prepare(`
+    INSERT INTO productos_no_reservables (tenant_id, nombre) VALUES (?, ?)
+  `).run(tenantId, String(nombre).trim());
+}
+
+function eliminarNoReservable(id, tenantId) {
+  return db.prepare(`
+    DELETE FROM productos_no_reservables WHERE id = ? AND tenant_id = ?
+  `).run(id, tenantId);
+}
+
+/**
+ * Indica si un texto de producto coincide con alguno de los productos no reservables del tenant.
+ * Comparación por inclusión de substring (case-insensitive) en ambos sentidos.
+ */
+function esNoReservable(tenantId, textoProducto, listaCache = null) {
+  if (!textoProducto) return false;
+  const lista = listaCache || listarNoReservables(tenantId);
+  if (!lista.length) return false;
+  const texto = textoProducto.toLowerCase();
+  return lista.some(p => {
+    const nombre = p.nombre.toLowerCase();
+    return texto.includes(nombre) || nombre.includes(texto);
+  });
+}
+
+module.exports = {
+  buscarProductos, formatearParaBot, agregarProducto, actualizarStock, listarProductos,
+  listarNoReservables, agregarNoReservable, eliminarNoReservable, esNoReservable,
+};

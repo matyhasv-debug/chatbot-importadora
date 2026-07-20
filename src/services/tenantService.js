@@ -33,6 +33,10 @@ function buildConfig(tenant) {
     FROM tenant_embalajes WHERE tenant_id = ?
   `).all(tenant.id);
 
+  const productosNoReservables = db.prepare(`
+    SELECT nombre FROM productos_no_reservables WHERE tenant_id = ?
+  `).all(tenant.id).map(r => r.nombre);
+
   return {
     tenantId: tenant.id,
     modoCatalogo: tenant.modo_catalogo || 'bsale',
@@ -73,11 +77,13 @@ function buildConfig(tenant) {
       whatsappPhoneId: tenant.whatsapp_phone_id,
       whatsappToken:   tenant.whatsapp_token,
       notifTelefono:   tenant.notif_telefono,
+      notifEmail:      tenant.notif_email,
       pagoPasarela:    tenant.pasarela_tipo    || '',
       pagoApiKey:      tenant.pasarela_api_key || '',
       pagoApiSecret:   tenant.pasarela_api_secret || '',
     },
     embalajes,
+    productosNoReservables,
     tipoNegocio:     tenant.tipo_negocio   || 'tienda',
     promptExtra:     tenant.prompt_extra   || '',
     tieneCatalogoPDF: !!tenant.modo_catalogo_pdf,

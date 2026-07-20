@@ -10,6 +10,7 @@ const { invalidarCacheByTenantId } = require('../services/tenantService');
 const { MENSAJES_DEFAULT }          = require('../services/followUpService');
 const pdfService  = require('../services/pdfService');
 const calendarService = require('../services/calendarService');
+const emailService = require('../services/emailService');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
@@ -470,7 +471,7 @@ router.post('/api/tenants', express.json(), (req, res) => {
 router.get('/api/tenant-info', verificarAdmin, (req, res) => {
   try {
     const key    = req.query.key || req.headers['x-admin-key'] || '';
-    const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers FROM tenants WHERE activo = 1 LIMIT 1`).get();
+    const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, notif_email, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers FROM tenants WHERE activo = 1 LIMIT 1`).get();
     if (!tenant) return res.status(404).json({ ok: false });
     res.json({ ok: true, ...tenant });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -484,7 +485,7 @@ router.put('/api/tenants/:id/config', express.json(), (req, res) => {
     const tenant = db.prepare(`SELECT id FROM tenants WHERE id = ?`).get(req.params.id);
     if (!tenant) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
 
-    const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','garantia_email','prompt_extra','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
+    const campos = ['notif_telefono','notif_email','empresa_nombre','empresa_dir','empresa_horario','empresa_web','empresa_domingos','pago_banco','pago_tipo','pago_cuenta','pago_titular','pago_rut','pago_email','envio_courier','envio_tiempo','envio_quien_paga','garantia_meses','garantia_cond','garantia_email','prompt_extra','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers'];
     const updates = [];
     const vals    = [];
     for (const c of campos) {
@@ -707,28 +708,45 @@ router.post('/:slug/api/responder', express.json(), async (req, res) => {
   }
 });
 
-// ─── Helper: enviar notificación WhatsApp al dueño ───────────────────────────
+// ─── Helper: enviar notificación WhatsApp + email al dueño ───────────────────
 async function enviarNotifDueno(tenant, slug, body) {
   const DUENO_TEL = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
   const phoneId   = tenant.whatsapp_phone_id || process.env.WHATSAPP_PHONE_ID;
   const tok       = tenant.whatsapp_token    || process.env.WHATSAPP_TOKEN;
   console.log(`[Notif/${slug}] tel:${DUENO_TEL || 'SIN_TEL'} phoneId:${phoneId || 'SIN_ID'} token:${tok ? 'OK' : 'SIN_TOKEN'}`);
-  if (!DUENO_TEL) return { ok: false, razon: 'Sin notif_telefono configurado' };
-  if (!phoneId)   return { ok: false, razon: 'Sin whatsapp_phone_id' };
-  if (!tok)       return { ok: false, razon: 'Sin whatsapp_token' };
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v18.0/${phoneId}/messages`,
-      { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL, type: 'text', text: { preview_url: false, body } },
-      { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
-    );
-    console.log(`[Notif/${slug}] ✅ Enviada a ${DUENO_TEL}`);
-    return { ok: true };
-  } catch (err) {
-    const detalle = JSON.stringify(err.response?.data || err.message);
-    console.error(`[Notif/${slug}] ❌ Error:`, detalle);
-    return { ok: false, razon: detalle };
+
+  let resultado;
+  if (!DUENO_TEL) resultado = { ok: false, razon: 'Sin notif_telefono configurado' };
+  else if (!phoneId) resultado = { ok: false, razon: 'Sin whatsapp_phone_id' };
+  else if (!tok) resultado = { ok: false, razon: 'Sin whatsapp_token' };
+  else {
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+        { messaging_product: 'whatsapp', recipient_type: 'individual', to: DUENO_TEL, type: 'text', text: { preview_url: false, body } },
+        { headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' } }
+      );
+      console.log(`[Notif/${slug}] ✅ Enviada a ${DUENO_TEL}`);
+      resultado = { ok: true };
+    } catch (err) {
+      const detalle = JSON.stringify(err.response?.data || err.message);
+      console.error(`[Notif/${slug}] ❌ Error:`, detalle);
+      resultado = { ok: false, razon: detalle };
+    }
   }
+
+  if (tenant.notif_email) {
+    try {
+      await emailService.enviarNotificacion(tenant.notif_email, 'test', body.replace(/\*/g, ''));
+      console.log(`[Notif/${slug}] ✅ Email enviado a ${tenant.notif_email}`);
+      resultado.email = { ok: true };
+    } catch (err) {
+      console.error(`[Notif/${slug}] ❌ Error email:`, err.message);
+      resultado.email = { ok: false, razon: err.message };
+    }
+  }
+
+  return resultado;
 }
 
 // ─── API cliente: test de notificación ───────────────────────────────────────
@@ -789,7 +807,7 @@ router.post('/:slug/api/estado-cliente', express.json(), async (req, res) => {
 // ─── API cliente: info del tenant (config modal) ─────────────────────────────
 router.get('/:slug/api/tenant-info', (req, res) => {
   const { slug } = req.params;
-  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo, garantia_email, prompt_extra FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  const tenant = db.prepare(`SELECT id, empresa_nombre, empresa_dir, empresa_horario, empresa_web, notif_telefono, notif_email, envio_internacional_activo, envio_internacional_minimo_usd, envio_internacional_couriers, panel_logo_url, panel_color, panel_titulo, google_client_id, google_client_secret, CASE WHEN google_refresh_token IS NOT NULL AND google_refresh_token != '' THEN 1 ELSE 0 END as google_conectado, google_calendar_id, modo_catalogo, garantia_email, prompt_extra FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   res.json({ ok: true, ...tenant });
 });
@@ -800,7 +818,7 @@ router.put('/:slug/api/tenant-config', express.json(), (req, res) => {
   const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
-  const campos = ['notif_telefono','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo','google_client_id','google_client_secret','google_calendar_id','prompt_extra'];
+  const campos = ['notif_telefono','notif_email','empresa_nombre','empresa_dir','empresa_horario','empresa_web','envio_internacional_activo','envio_internacional_minimo_usd','envio_internacional_couriers','pasarela_tipo','pasarela_api_key','pasarela_api_secret','modo_catalogo','modo_catalogo_pdf','panel_logo_url','panel_color','panel_titulo','google_client_id','google_client_secret','google_calendar_id','prompt_extra'];
   const updates = [], vals = [];
   for (const c of campos) {
     if (req.body[c] !== undefined) { updates.push(`${c} = ?`); vals.push(req.body[c]); }
@@ -893,6 +911,39 @@ router.delete('/:slug/api/embalajes/:id', (req, res) => {
   if (!tenant) return res.status(404).json({ ok: false });
   if (!verificarAuthCliente(req, res, tenant)) return;
   db.prepare(`DELETE FROM tenant_embalajes WHERE id=? AND tenant_id=?`).run(req.params.id, tenant.id);
+  invalidarCacheByTenantId(tenant.id);
+  res.json({ ok: true });
+});
+
+// ─── API cliente: productos sin reserva (solo venta en tienda) ───────────────
+router.get('/:slug/api/productos-no-reservables', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const productos = db.prepare(`SELECT * FROM productos_no_reservables WHERE tenant_id = ? ORDER BY nombre`).all(tenant.id);
+  res.json({ ok: true, productos });
+});
+
+router.post('/:slug/api/productos-no-reservables', express.json(), (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  const { nombre } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ ok: false, error: 'Falta nombre' });
+  const r = db.prepare(`INSERT INTO productos_no_reservables (tenant_id, nombre) VALUES (?, ?)`)
+    .run(tenant.id, nombre.trim());
+  invalidarCacheByTenantId(tenant.id);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+router.delete('/:slug/api/productos-no-reservables/:id', (req, res) => {
+  const { slug } = req.params;
+  const tenant = db.prepare(`SELECT * FROM tenants WHERE slug = ? AND activo = 1`).get(slug);
+  if (!tenant) return res.status(404).json({ ok: false });
+  if (!verificarAuthCliente(req, res, tenant)) return;
+  db.prepare(`DELETE FROM productos_no_reservables WHERE id=? AND tenant_id=?`).run(req.params.id, tenant.id);
   invalidarCacheByTenantId(tenant.id);
   res.json({ ok: true });
 });

@@ -7,6 +7,7 @@ const { procesarMensaje }             = require('../services/chatbotController')
 const tenantService = require('../services/tenantService');
 const db            = require('../config/database');
 const pagoService   = require('../services/pagoService');
+const emailService  = require('../services/emailService');
 
 // ─── Verificar firma HMAC-SHA256 de Meta ──────────────────────────────────────
 function verificarFirma(req, res, next) {
@@ -167,16 +168,20 @@ router.post('/pago-flow', express.urlencoded({ extended: true }), async (req, re
     );
 
     // Notificar al dueño
+    const detalleMsg =
+      `Cliente: ${nombre} (${pago.telefono})\n` +
+      `Monto: $${Math.round(pago.monto).toLocaleString('es-CL')}\n` +
+      `Orden: ${pago.orden_id}\n` +
+      `Detalle: ${pago.descripcion}`;
+
     const notifTel = tenant.notif_telefono || process.env.DUENO_WHATSAPP;
     if (notifTel) {
-      await enviarMensaje(notifTel,
-        `💳 *PAGO FLOW CONFIRMADO*\n` +
-        `Cliente: ${nombre} (${pago.telefono})\n` +
-        `Monto: $${Math.round(pago.monto).toLocaleString('es-CL')}\n` +
-        `Orden: ${pago.orden_id}\n` +
-        `Detalle: ${pago.descripcion}`,
-        phoneId, tok
-      );
+      await enviarMensaje(notifTel, `💳 *PAGO FLOW CONFIRMADO*\n${detalleMsg}`, phoneId, tok);
+    }
+    if (tenant.notif_email) {
+      await emailService.enviarNotificacion(tenant.notif_email, 'pago_confirmado', `PAGO FLOW CONFIRMADO\n${detalleMsg}`).catch(err => {
+        console.error('[Flow] ❌ Error enviando email de confirmación:', err.message);
+      });
     }
 
     console.log(`[Flow] ✅ Pago confirmado — ${pago.orden_id} | ${pago.telefono} | $${pago.monto}`);

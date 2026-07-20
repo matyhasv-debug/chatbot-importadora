@@ -58,6 +58,20 @@ async function reenviarMedia(destino, mediaId, tipo, caption, phoneId = null, to
   }
 }
 
+// ─── Descargar bytes de un media de WhatsApp (para adjuntar en email, etc.) ───
+async function descargarMedia(mediaId, phoneId = null, token = null) {
+  const tok = token || process.env.WHATSAPP_TOKEN;
+  const { data: meta } = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${tok}` },
+  });
+  const { data: binario } = await axios.get(meta.url, {
+    headers: { Authorization: `Bearer ${tok}` },
+    responseType: 'arraybuffer',
+  });
+  const ext = (meta.mime_type || '').split('/')[1]?.split(';')[0] || 'bin';
+  return { filename: `comprobante.${ext}`, content: Buffer.from(binario), mime: meta.mime_type };
+}
+
 async function marcarLeido(messageId, phoneId = null, token = null) {
   const api = crearApiWA(phoneId, token);
   try {
@@ -175,4 +189,4 @@ function parsearWebhook(body) {
   }
 }
 
-module.exports = { enviarMensaje, marcarLeido, enviarMenu, enviarBotonesConfirmar, parsearWebhook, reenviarMedia };
+module.exports = { enviarMensaje, marcarLeido, enviarMenu, enviarBotonesConfirmar, parsearWebhook, reenviarMedia, descargarMedia };
