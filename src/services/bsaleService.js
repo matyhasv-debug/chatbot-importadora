@@ -194,10 +194,10 @@ async function obtenerStock(variantId, token = null) {
 }
 
 // ─── Obtener todos los datos de una variante ──────────────────────────────────
-// NOTA: los IDs de LISTAS.mayorista2/mayorista3 están hardcodeados y son
-// específicos de cada cuenta de Bsale — no se puede asumir que el ID 8/7
-// corresponda a "precio mayorista" en la cuenta de cada tenant. Deshabilitado
-// hasta confirmar el ID correcto por cuenta (ver LISTAS arriba).
+// Precio mayorista automático deshabilitado a propósito: el ID de lista
+// (LISTAS.mayorista2/3) es específico de cada cuenta de Bsale y no se puede
+// asumir igual entre tenants, y en la práctica se usa muy poco. El bot
+// siempre indica "consultar directamente" para pedidos por volumen.
 const MAYORISTA_HABILITADO = false;
 
 async function obtenerDatosVariante(variantId, token = null) {
