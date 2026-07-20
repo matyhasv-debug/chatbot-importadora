@@ -429,6 +429,7 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
 
   const tipo       = TIPOS_NEGOCIO[config.tipoNegocio] || TIPOS_NEGOCIO.tienda;
   const catalogoLbl = tipo.catalogoLbl;
+  const hoy = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
 
   const systemPrompt = [
     `Eres ${nombreAsistente}, asistente virtual de ${config.empresa.nombre}.`,
@@ -438,6 +439,7 @@ async function generarRespuesta(mensajeUsuario, historialDB = [], contextoExtra 
     `3. NUNCA inventes información — usa SOLO los datos de [${catalogoLbl}].`,
     `4. Mantén el contexto de toda la conversación para responder con coherencia.`,
     `5. NUNCA muestres el menú como respuesta a una consulta específica.`,
+    `6. Hoy es ${hoy} en Chile. Si el horario del negocio tiene un horario distinto para ese día (ej: sábados, domingos), usa ESE horario específico al responder sobre "hoy" o "ahora" — nunca el horario general de lunes a viernes por defecto. Si el cliente menciona un día específico (ej: "sábado"), usa el horario de ESE día, no el general.`,
     `\n${buildInfoTienda(config)}`,
     `\n${buildReglas(config, nombreAsistente)}`,
   ].join('\n');
