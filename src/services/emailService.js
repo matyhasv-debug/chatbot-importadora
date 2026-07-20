@@ -1,27 +1,9 @@
 // src/services/emailService.js
-const nodemailer = require('nodemailer');
+// Envía correos vía la API HTTP de Brevo (https://api.brevo.com) en vez de SMTP directo,
+// porque muchos hosts (Railway incluido) bloquean conexiones SMTP salientes.
+const axios = require('axios');
 
-let transporter;
-let transporterConfigurado = false;
-
-function getTransporter() {
-  if (transporterConfigurado) return transporter;
-  transporterConfigurado = true;
-
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    transporter = null;
-    return null;
-  }
-
-  transporter = nodemailer.createTransport({
-    host:   SMTP_HOST,
-    port:   Number(SMTP_PORT) || 587,
-    secure: Number(SMTP_PORT) === 465,
-    auth:   { user: SMTP_USER, pass: SMTP_PASS },
-  });
-  return transporter;
-}
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 const ASUNTOS = {
   pago_detectado:      '💰 Pago detectado',
@@ -39,28 +21,32 @@ const ASUNTOS = {
 // adjunto opcional: { filename, content: Buffer, mime }
 async function enviarNotificacion(destinatario, tipo, mensajeTexto, adjunto = null) {
   if (!destinatario) return;
-  const tr = getTransporter();
-  if (!tr) {
-    console.warn('[Email] ⚠️ SMTP no configurado (SMTP_HOST/SMTP_USER/SMTP_PASS), se omite envío');
+
+  const apiKey    = process.env.BREVO_API_KEY;
+  const remitente = process.env.SMTP_FROM || process.env.EMAIL_FROM;
+  if (!apiKey || !remitente) {
+    console.warn('[Email] ⚠️ BREVO_API_KEY/SMTP_FROM no configurado, se omite envío');
     return;
   }
 
-  const mailOptions = {
-    from:    process.env.SMTP_FROM || process.env.SMTP_USER,
-    to:      destinatario,
-    subject: ASUNTOS[tipo] || `Notificación: ${tipo}`,
-    text:    mensajeTexto,
+  const payload = {
+    sender:      { email: remitente },
+    to:          [{ email: destinatario }],
+    subject:     ASUNTOS[tipo] || `Notificación: ${tipo}`,
+    textContent: mensajeTexto,
   };
 
   if (adjunto?.content) {
-    mailOptions.attachments = [{
-      filename:    adjunto.filename || 'comprobante',
-      content:     adjunto.content,
-      contentType: adjunto.mime || 'application/octet-stream',
+    payload.attachment = [{
+      content: adjunto.content.toString('base64'),
+      name:    adjunto.filename || 'comprobante',
     }];
   }
 
-  await tr.sendMail(mailOptions);
+  await axios.post(BREVO_API_URL, payload, {
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    timeout: 10000,
+  });
 }
 
 module.exports = { enviarNotificacion };
