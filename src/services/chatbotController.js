@@ -971,9 +971,13 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
           contextoExtra = bsaleCtx;
           if (/💵/.test(bsaleCtx)) guardarCarrito(telefono, tenantId, producto);
         }
+        if (esMayor && contextoExtra.includes('CONSULTAR DIRECTAMENTE')) {
+          await notificarDueno('lead_mayorista', telefono, nombre,
+            `Pidió ${cantidad} unidades de "${producto}" — no hay precio mayorista automático, necesita cotización manual.`, config);
+        }
         const instrPedido = esMayor
           ? `\n\nEl cliente quiere ${cantidad} unidades de "${producto}" (pedido mayorista).
-INSTRUCCIÓN CRÍTICA: Si el catálogo dice "CONSULTAR DIRECTAMENTE" para precio mayorista, NO calcules ningún total. Di: "Para ${cantidad} unidades te ofrezco precio especial mayorista 📦 Contáctanos directamente para cotizar ese volumen. ¿Quieres que te pase el teléfono o email de ventas?" — NO des precio unitario × cantidad como total.
+INSTRUCCIÓN CRÍTICA: Si el catálogo dice "CONSULTAR DIRECTAMENTE" para precio mayorista, NO calcules ningún total y NO preguntes si quiere que le pases el contacto — ya se le avisó automáticamente a nuestro equipo. Di exactamente algo como: "Para ${cantidad} unidades de ${producto} ya avisé a nuestro equipo de ventas 📦 Te van a escribir por acá mismo con el precio especial a la brevedad. ¿Te ayudo con algo más mientras tanto? 😊" — NO des precio unitario × cantidad como total, y NO dejes la conversación esperando una respuesta del cliente sobre el contacto.
 Si SÍ hay precio mayorista en el catálogo, muestra el resumen con ese precio mayorista.`
           : `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
 INSTRUCCIÓN: Muestra el resumen del pedido:
