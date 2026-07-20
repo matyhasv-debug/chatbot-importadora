@@ -39,6 +39,7 @@ function buildConfig(tenant) {
 
   return {
     tenantId: tenant.id,
+    slug: tenant.slug,
     modoCatalogo: tenant.modo_catalogo || 'bsale',
     empresa: {
       nombre:    tenant.empresa_nombre,

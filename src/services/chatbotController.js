@@ -323,12 +323,16 @@ async function _procesarMensaje(data) {
 
     if (!texto && !mediaInfo) return;
 
-    // ── Demo Contable: flujo por etapas ──────────────────────────────────────────
+    // ── Demos comerciales (USAIA / Contable): SOLO en el tenant de demos ──────────
+    // Restringido por slug para que nunca pueda "secuestrar" la conversación de un
+    // cliente real (ej: si alguna vez se menciona "usaia" en el historial de otro tenant).
+    const esTenantDemo = !!config.slug && config.slug === process.env.USAIA_DEMO_TENANT_SLUG;
+
     const historialPrevio = obtenerHistorial(telefono, tenantId, 10);
     const etapaActual     = getEtapa(telefono, tenantId);
 
-    const esDemoContable = /demo\s*contable/i.test(texto) ||
-      etapaActual.startsWith('demo_contable');
+    const esDemoContable = esTenantDemo && (/demo\s*contable/i.test(texto) ||
+      etapaActual.startsWith('demo_contable'));
 
     if (texto && esDemoContable) {
       const NOTIF_DEMO = '56940629970'; // Edgar
@@ -462,8 +466,8 @@ async function _procesarMensaje(data) {
     }
 
     // ── Demo USAIA: responder con info del servicio cuando alguien llega desde la web ──
-    const esDemoUSAIA = /usaia/i.test(texto) ||
-      historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje));
+    const esDemoUSAIA = esTenantDemo && (/usaia/i.test(texto) ||
+      historialPrevio.some(m => /usaia|56999269035/i.test(m.mensaje)));
 
     if (texto && esDemoUSAIA) {
       const PLANES_USAIA = `=== PLANES USAIA ===
