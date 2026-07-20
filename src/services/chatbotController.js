@@ -977,7 +977,7 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
         }
         const instrPedido = esMayor
           ? `\n\nEl cliente quiere ${cantidad} unidades de "${producto}" (pedido mayorista).
-INSTRUCCIÓN CRÍTICA: Si el catálogo dice "CONSULTAR DIRECTAMENTE" para precio mayorista, NO calcules ningún total y NO preguntes si quiere que le pases el contacto — ya se le avisó automáticamente a nuestro equipo. Di exactamente algo como: "Para ${cantidad} unidades de ${producto} ya avisé a nuestro equipo de ventas 📦 Te van a escribir por acá mismo con el precio especial a la brevedad. ¿Te ayudo con algo más mientras tanto? 😊" — NO des precio unitario × cantidad como total, y NO dejes la conversación esperando una respuesta del cliente sobre el contacto.
+INSTRUCCIÓN CRÍTICA: Si el catálogo dice "CONSULTAR DIRECTAMENTE" para precio mayorista, NO calcules ningún total con precio mayorista y NO preguntes si quiere que le pases el contacto — ya se le avisó automáticamente a nuestro equipo. SÍ mencioná el precio unitario real que aparece en el catálogo (el normal, de a 1 unidad) como referencia. Di algo como: "El precio unitario de ${producto} es $[precio unitario del catálogo] 💵. Para ${cantidad} unidades ya avisé a nuestro equipo de ventas 📦 — te van a escribir por acá mismo con el precio especial para ese volumen. ¿Te ayudo con algo más mientras tanto? 😊" — NO calcules precio unitario × cantidad como total, y NO dejes la conversación esperando una respuesta del cliente sobre el contacto.
 Si SÍ hay precio mayorista en el catálogo, muestra el resumen con ese precio mayorista.`
           : `\n\nEl cliente quiere hacer un pedido de ${cantidad} unidad(es) de "${producto}".
 INSTRUCCIÓN: Muestra el resumen del pedido:
