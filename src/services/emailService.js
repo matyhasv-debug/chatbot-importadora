@@ -1,9 +1,13 @@
 // src/services/emailService.js
-// Envía correos vía la API HTTP de Brevo (https://api.brevo.com) en vez de SMTP directo,
-// porque muchos hosts (Railway incluido) bloquean conexiones SMTP salientes.
+// Envía correos vía la API HTTP de Resend (https://resend.com).
+// Se usa una API en vez de SMTP directo porque muchos hosts (Railway incluido)
+// bloquean conexiones SMTP salientes. Con Resend sin dominio propio verificado,
+// el remitente debe ser onboarding@resend.dev y solo se puede enviar al correo
+// con el que se creó la cuenta de Resend.
 const axios = require('axios');
 
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const RESEND_API_URL = 'https://api.resend.com/emails';
+const REMITENTE_DEFAULT = 'onboarding@resend.dev';
 
 const ASUNTOS = {
   pago_detectado:      '💰 Pago detectado',
@@ -22,29 +26,28 @@ const ASUNTOS = {
 async function enviarNotificacion(destinatario, tipo, mensajeTexto, adjunto = null) {
   if (!destinatario) return;
 
-  const apiKey    = process.env.BREVO_API_KEY;
-  const remitente = process.env.SMTP_FROM || process.env.EMAIL_FROM;
-  if (!apiKey || !remitente) {
-    console.warn('[Email] ⚠️ BREVO_API_KEY/SMTP_FROM no configurado, se omite envío');
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('[Email] ⚠️ RESEND_API_KEY no configurado, se omite envío');
     return;
   }
 
   const payload = {
-    sender:      { email: remitente },
-    to:          [{ email: destinatario }],
-    subject:     ASUNTOS[tipo] || `Notificación: ${tipo}`,
-    textContent: mensajeTexto,
+    from:    process.env.EMAIL_FROM || REMITENTE_DEFAULT,
+    to:      [destinatario],
+    subject: ASUNTOS[tipo] || `Notificación: ${tipo}`,
+    text:    mensajeTexto,
   };
 
   if (adjunto?.content) {
-    payload.attachment = [{
-      content: adjunto.content.toString('base64'),
-      name:    adjunto.filename || 'comprobante',
+    payload.attachments = [{
+      filename: adjunto.filename || 'comprobante',
+      content:  adjunto.content.toString('base64'),
     }];
   }
 
-  await axios.post(BREVO_API_URL, payload, {
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+  await axios.post(RESEND_API_URL, payload, {
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     timeout: 10000,
   });
 }
