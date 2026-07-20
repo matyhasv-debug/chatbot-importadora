@@ -194,11 +194,17 @@ async function obtenerStock(variantId, token = null) {
 }
 
 // ─── Obtener todos los datos de una variante ──────────────────────────────────
+// NOTA: los IDs de LISTAS.mayorista2/mayorista3 están hardcodeados y son
+// específicos de cada cuenta de Bsale — no se puede asumir que el ID 8/7
+// corresponda a "precio mayorista" en la cuenta de cada tenant. Deshabilitado
+// hasta confirmar el ID correcto por cuenta (ver LISTAS arriba).
+const MAYORISTA_HABILITADO = false;
+
 async function obtenerDatosVariante(variantId, token = null) {
   const [unitario, mayorista2, mayorista3, stock] = await Promise.all([
-    obtenerPrecioLista(variantId, LISTAS.unitario.id,   token),
-    obtenerPrecioLista(variantId, LISTAS.mayorista2.id, token),
-    obtenerPrecioLista(variantId, LISTAS.mayorista3.id, token),
+    obtenerPrecioLista(variantId, LISTAS.unitario.id, token),
+    MAYORISTA_HABILITADO ? obtenerPrecioLista(variantId, LISTAS.mayorista2.id, token) : Promise.resolve(0),
+    MAYORISTA_HABILITADO ? obtenerPrecioLista(variantId, LISTAS.mayorista3.id, token) : Promise.resolve(0),
     obtenerStock(variantId, token),
   ]);
   return { unitario, mayorista2, mayorista3, stock };
