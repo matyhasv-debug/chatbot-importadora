@@ -227,7 +227,13 @@ async function obtenerContextoBsale(query, mayorista = false, telefono = '', nom
 
 // ─── Detección automática de pago ─────────────────────────────────────────────
 function detectarPagoEnTexto(texto) {
-  return /comprobante|transfer[ei]|pag[ué]|ya pag|hice la transfer|realic[eé] el pago|te mand[oé] el comprobante|adjunto comprobante|acá el comprobante|acá te mando/.test(texto.toLowerCase());
+  const t = texto.toLowerCase();
+  // El cliente está pidiendo los datos para pagar, no confirmando que ya pagó
+  // (ej: "me envías los datos para transferencia", "cuál es la cuenta")
+  if (/(env[íi]a[sm]?|pasa[sm]?|manda[sm]?|dame|d[ií]ctame|cu[aá]les? (es|son)|d[oó]nde deposito|a qu[eé] cuenta|c[oó]mo (te )?pago)\b.{0,25}(datos|cuenta|n[uú]mero|transferencia)/.test(t)) {
+    return false;
+  }
+  return /comprobante|transfer[ei]|pag[ué]|ya pag|hice la transfer|realic[eé] el pago|te mand[oé] el comprobante|adjunto comprobante|acá el comprobante|acá te mando/.test(t);
 }
 
 // ─── Extraer precio numérico del contexto de Bsale ───────────────────────────
@@ -554,12 +560,10 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
     console.log(`[BOT] 📩 ${nombre} (${telefono}): ${textoParaGuardar}`);
     guardarMensaje(telefono, nombre, 'user', textoParaGuardar, tenantId);
 
-    if (texto && detectarPagoEnTexto(texto)) {
-      actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
-      followUpService.cancelarSeguimientos(telefono, tenantId);
-      console.log(`[BOT] 💰 Pago detectado de ${telefono}`);
-      await notificarDueno('pago_detectado', telefono, nombre, texto.slice(0, 100), config);
-    } else if (mediaInfo && detectarComprobante(data)) {
+    if (mediaInfo && (detectarComprobante(data) || (texto && detectarPagoEnTexto(texto)))) {
+      // Prioriza la rama de media: si el cliente manda la foto del comprobante
+      // con un caption tipo "ya pagué", antes caía en detectarPagoEnTexto y
+      // se perdía el adjunto (nunca se descargaba ni reenviaba la imagen).
       actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
       followUpService.cancelarSeguimientos(telefono, tenantId);
       console.log(`[BOT] 🧾 Comprobante recibido de ${telefono}`);
@@ -577,6 +581,11 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
         const caption = `🧾 Comprobante de *${nombre}* (${telefono})`;
         await reenviarMedia(dueno, mediaInfo.media_id, mediaInfo.tipo, caption, whatsappPhoneId, whatsappToken).catch(() => {});
       }
+    } else if (texto && detectarPagoEnTexto(texto)) {
+      actualizarEstadoCliente(telefono, 'pago_pendiente', tenantId);
+      followUpService.cancelarSeguimientos(telefono, tenantId);
+      console.log(`[BOT] 💰 Pago detectado de ${telefono}`);
+      await notificarDueno('pago_detectado', telefono, nombre, texto.slice(0, 100), config);
     }
 
     // Imágenes/audio/video sin caption llegan como texto "[IMAGE]", "[AUDIO]", etc.
