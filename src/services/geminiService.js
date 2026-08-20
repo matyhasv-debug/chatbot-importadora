@@ -3,7 +3,7 @@ const axios = require('axios');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_URL     = 'https://api.groq.com/openai/v1/chat/completions';
-const MODELO       = 'llama-3.3-70b-versatile';
+const MODELO       = 'openai/gpt-oss-120b';
 
 // ─── Nombre del asistente — determinista por teléfono ────────────────────────
 function obtenerNombreAsistente(telefono, asistentes = []) {
@@ -247,6 +247,7 @@ ${cfg.productosNoReservables?.length ? `- CRÍTICO PRODUCTOS SOLO VENTA EN TIEND
 - "grupo de ofertas / grupo de WhatsApp" → "No manejamos grupos, pero te puedo ayudar aquí mismo 😊 ¿En qué te puedo ayudar?"
 - "instagram/redes" → "Puedes ver más información en ${web} ¿Te ayudo con algo específico?"
 - "ya compré / ya pagué / ya transferí" → Pregunta amablemente qué producto compraron y si quieren enviar el comprobante para coordinar el despacho. No asumas que fue con nosotros si no hay contexto claro.
+- "factura" / "me dan factura" / "necesito factura" → Aclara con amabilidad que las facturas solo se emiten comprando presencialmente en tienda. Por WhatsApp/transferencia se entrega boleta, no factura. NUNCA digas que las compras por WhatsApp incluyen factura.
 - Cuando el cliente pide VER el producto, fotos o imágenes → Responde que puede verlos en ${web} donde están las fotos y detalles. Aquí solo puedes dar precio y disponibilidad. Ejemplo: "Puedes ver las fotos en ${web} 📸 ¿Te cuento el precio y disponibilidad?"
 - Preguntas sin relación al negocio → responde brevemente y redirige al objetivo del negocio.
 - NUNCA muestres el menú de opciones como respuesta a una consulta específica.`.trim();
