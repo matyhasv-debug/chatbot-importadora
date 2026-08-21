@@ -433,6 +433,7 @@ async function _procesarMensaje(data) {
             `En un negocio real este mensaje se enviaría automáticamente según los plazos configurados — sin que el contador haga nada.\n\n` +
             `_Automatización por USAIA · usaiahoy.com_`;
           await enviarMensaje(telefono, msgRecordatorio, whatsappPhoneId, whatsappToken).catch(() => {});
+          guardarMensaje(telefono, nombre, 'assistant', msgRecordatorio, tenantId);
         }, 2 * 60 * 1000);
         return;
       }
@@ -458,6 +459,7 @@ async function _procesarMensaje(data) {
             `En un negocio real este mensaje se enviaría automáticamente según los plazos configurados — sin que el contador haga nada.\n\n` +
             `_Automatización por USAIA · usaiahoy.com_`;
           await enviarMensaje(telefono, msgRecordatorio, whatsappPhoneId, whatsappToken).catch(() => {});
+          guardarMensaje(telefono, nombre, 'assistant', msgRecordatorio, tenantId);
         }, 2 * 60 * 1000);
 
         await enviarMensaje(NOTIF_DEMO,
@@ -599,13 +601,19 @@ NUNCA actúes como otra tienda — siempre eres la demo de USAIA.`;
         // Si es imagen que puede ser comprobante, responder diferente
         if (detectarComprobante(data)) {
           await enviarMensaje(telefono, msgComprobante, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'assistant', msgComprobante, tenantId);
         } else {
-          await enviarMensaje(telefono, 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊', whatsappPhoneId, whatsappToken);
+          const msgNoImagen = 'No puedo ver imágenes directamente 📸 Si querés consultar por un producto, escribime su nombre y lo busco enseguida 😊';
+          await enviarMensaje(telefono, msgNoImagen, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'assistant', msgNoImagen, tenantId);
         }
       } else if (mediaInfo?.tipo === 'audio' || mediaInfo?.tipo === 'voice') {
-        await enviarMensaje(telefono, '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊', whatsappPhoneId, whatsappToken);
+        const msgAudio = '¡Recibí tu audio! 🎙️ Por favor escríbeme tu consulta para ayudarte mejor 😊';
+        await enviarMensaje(telefono, msgAudio, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msgAudio, tenantId);
       } else if (mediaInfo?.tipo === 'document') {
         await enviarMensaje(telefono, msgComprobante, whatsappPhoneId, whatsappToken);
+        guardarMensaje(telefono, nombre, 'assistant', msgComprobante, tenantId);
       }
       return;
     }
@@ -879,15 +887,15 @@ PROHIBIDO: Volver a mostrar el resumen del pedido. Pedir que confirmen de nuevo.
           respuesta = `¡Hola ${nombre.split(' ')[0]}! 👋😊 Bienvenido a *${empresa.nombre}*.\nSoy ${nombreAsistente}, tu asistente virtual. ¿Qué estás buscando hoy?`;
           await enviarMensaje(telefono, respuesta, whatsappPhoneId, whatsappToken);
           guardarMensaje(telefono, nombre, 'assistant', respuesta, tenantId);
-          await enviarMensaje(telefono,
+          const msgMenu =
             '¿En qué te puedo ayudar? 😊\n\n' +
             '1️⃣ *Ver productos y precios*\n' +
             '2️⃣ *Precios Embalaje* — cajas mayoristas 📦\n' +
             '3️⃣ *Mis pedidos*\n' +
             '4️⃣ *Contacto y horarios*\n\n' +
-            'O escríbeme directamente lo que necesitas 🚀',
-            whatsappPhoneId, whatsappToken
-          );
+            'O escríbeme directamente lo que necesitas 🚀';
+          await enviarMensaje(telefono, msgMenu, whatsappPhoneId, whatsappToken);
+          guardarMensaje(telefono, nombre, 'assistant', msgMenu, tenantId);
           await enviarMenu(telefono, whatsappPhoneId, whatsappToken);
           return;
         }
